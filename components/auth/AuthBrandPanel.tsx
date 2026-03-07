@@ -1,4 +1,4 @@
-import { KapzoLogo, FloatingPill } from './KapzoLogo'
+import { FloatingPill } from './KapzoLogo'
 
 const pills = [
   { w: 72, h: 26, r: -35, top: '8%',  left: '8%',  anim: 'animate-pill-float',  delay: '0s',    color1: '#21A053', color2: '#00326F' },
@@ -48,14 +48,8 @@ export function AuthBrandPanel({
         </div>
       ))}
 
-      {/* Logo */}
-      <div className="relative z-10 flex items-center gap-3 animate-fade-in-up">
-        <KapzoLogo size={44} />
-        <div>
-          <span className="text-white font-bold text-xl tracking-tight font-display">Kapzo</span>
-          <p className="text-white/50 text-[11px] leading-none mt-0.5 font-sans">Vendor Portal</p>
-        </div>
-      </div>
+      {/* Spacer — keeps title/caption in same position after removing top logo */}
+      <div className="relative z-10 h-[52px]" aria-hidden />
 
       {/* Main copy */}
       <div className="relative z-10 space-y-5 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
@@ -67,7 +61,7 @@ export function AuthBrandPanel({
         </p>
 
         {/* Stats strip */}
-        <div className="flex gap-6 pt-2">
+        {/* <div className="flex gap-6 pt-2">
           {[
             { value: '2,400+', label: 'Partner Pharmacies' },
             { value: '30 min', label: 'Avg. Delivery' },
@@ -78,7 +72,7 @@ export function AuthBrandPanel({
               <p className="text-white/45 text-[11px] mt-0.5">{s.label}</p>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
 
       {/* Footer */}

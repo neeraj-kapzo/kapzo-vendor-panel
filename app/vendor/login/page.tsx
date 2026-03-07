@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Clock, Ban } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 import { OtpInput } from '@/components/auth/OtpInput'
-import { KapzoLogo } from '@/components/auth/KapzoLogo'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -152,12 +152,18 @@ export default function VendorLoginPage() {
       <AuthBrandPanel />
 
       {/* Right — form panel */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 bg-white min-h-screen">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:pb-8 xl:pb-12 sm:p-10 bg-white min-h-screen">
         <div className="w-full max-w-[400px] animate-fade-in-up">
-          {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-2.5 mb-10">
-            <KapzoLogo size={36} />
-            <span className="font-bold text-[#022135] text-lg">Kapzo Vendor</span>
+          {/* Logo — always visible above headings */}
+          <div className="mb-8">
+            <Image
+              src="/logos/Logo.png"
+              alt="Kapzo"
+              width={240}
+              height={36}
+              className="h-20 w-auto mx-auto object-contain block"
+              priority
+            />
           </div>
 
           {/* OTP verify step */}

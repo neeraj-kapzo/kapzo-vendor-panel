@@ -35,7 +35,7 @@ Pharmacy/vendor-facing web portal for the **Kapzo** medicine delivery platform (
 
 ### 1. Clone & install dependencies
 
-```bash
+```bashlog
 git clone <repo-url>
 cd kapzo-vendor-panel
 pnpm install

@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   LayoutDashboard, ShoppingBag, Package,
   Clock as HistoryIcon, LogOut, ChevronLeft,
 } from 'lucide-react'
 import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
-import { KapzoLogo } from '@/components/auth/KapzoLogo'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
 import { createClient } from '@/lib/supabase/client'
@@ -61,15 +61,23 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
       )}>
 
         {/* Logo */}
-        <div className="flex items-center h-16 px-4 border-b border-white/8 shrink-0">
-          <div className="shrink-0">
-            <KapzoLogo size={32} />
-          </div>
-          {!collapsed && (
-            <div className="ml-3 overflow-hidden">
-              <p className="text-white font-bold text-sm leading-tight">Kapzo</p>
-              <p className="text-white/40 text-[10px]">Vendor Portal</p>
-            </div>
+        <div className="flex items-center justify-center h-16 px-4 border-b border-white/8 shrink-0">
+          {collapsed ? (
+            <Image
+              src="/logos/logo-white.png"
+              alt="Kapzo"
+              width={32}
+              height={32}
+              className="w-8 h-8 object-contain"
+            />
+          ) : (
+            <Image
+              src="/logos/logo-white.png"
+              alt="Kapzo"
+              width={120}
+              height={36}
+              className="h-10 w-auto object-contain"
+            />
           )}
         </div>
 
