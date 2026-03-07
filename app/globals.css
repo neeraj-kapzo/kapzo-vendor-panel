@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
+/* ─── Kapzo Brand Tokens ─── */
+@theme inline {
+  /* Colors */
+  --color-kapzo-green: #21A053;
+  --color-kapzo-green-light: #2ecc70;
+  --color-kapzo-green-dark: #178040;
+  --color-kapzo-navy: #00326F;
+  --color-kapzo-navy-light: #0045a0;
+  --color-kapzo-dark: #022135;
+  --color-kapzo-dark-muted: rgba(2, 33, 53, 0.08);
+
+  /* Typography */
+  --font-sans: "DM Sans", "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Border Radius */
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-card: 0 2px 8px rgba(2, 33, 53, 0.08);
+  --shadow-card-hover: 0 4px 16px rgba(2, 33, 53, 0.14);
+  --shadow-modal: 0 8px 32px rgba(2, 33, 53, 0.18);
+}
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #022135;
+  --surface: #f8fafc;
+  --surface-dark: #022135;
+  --border: #e2e8f0;
+  --muted: #64748b;
+
+  /* Kapzo brand */
+  --kapzo-green: #21A053;
+  --kapzo-navy: #00326F;
+  --kapzo-dark: #022135;
+  --kapzo-gradient: linear-gradient(135deg, #21A053, #00326F);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "DM Sans", "Sora", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Utility classes ─── */
+.kapzo-gradient {
+  background: var(--kapzo-gradient);
+}
+
+.kapzo-gradient-text {
+  background: var(--kapzo-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card-shadow {
+  box-shadow: var(--shadow-card);
+}
+
+.card-shadow-hover:hover {
+  box-shadow: var(--shadow-card-hover);
+  transition: box-shadow 0.2s ease;
+}
+
+/* ─── Auth page animations ─── */
+@keyframes pill-float {
+  0%, 100% { transform: translateY(0px) rotate(var(--r, 0deg)); opacity: 0.18; }
+  50%       { transform: translateY(-22px) rotate(var(--r, 0deg)); opacity: 0.32; }
+}
+
+@keyframes pill-float-slow {
+  0%, 100% { transform: translateY(0px) rotate(var(--r, 0deg)); opacity: 0.12; }
+  50%       { transform: translateY(18px) rotate(var(--r, 0deg)); opacity: 0.25; }
+}
+
+@keyframes pill-drift {
+  0%, 100% { transform: translate(0, 0) rotate(var(--r, 0deg)); opacity: 0.15; }
+  33%       { transform: translate(-10px, -15px) rotate(calc(var(--r, 0deg) + 8deg)); opacity: 0.28; }
+  66%       { transform: translate(8px, -8px) rotate(calc(var(--r, 0deg) - 5deg)); opacity: 0.2; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes step-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes step-slide-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-24px); }
+}
+
+@keyframes progress-fill {
+  from { width: 0%; }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-pill-float  { animation: pill-float      4s ease-in-out infinite; }
+.animate-pill-slow   { animation: pill-float-slow  6s ease-in-out infinite; }
+.animate-pill-drift  { animation: pill-drift       7s ease-in-out infinite; }
+.animate-fade-in-up  { animation: fade-in-up       0.4s ease both; }
+.animate-fade-in     { animation: fade-in          0.3s ease both; }
+.animate-step-in     { animation: step-slide-in    0.35s ease both; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(2, 33, 53, 0.18);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(2, 33, 53, 0.32);
 }
