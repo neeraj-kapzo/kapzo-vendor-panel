@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { useVendorStore } from '@/lib/store/vendorStore'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import type { Order } from '@/types/database.types'
 
 /* ─── Audio alert (Web Audio API — no files needed) ─── */
@@ -79,7 +80,7 @@ export function useRealtimeOrders(vendorId: string | undefined) {
           table: 'orders',
           filter: `vendor_id=eq.${vendorId}`,
         },
-        async (payload) => {
+        async (payload: RealtimePostgresChangesPayload<Order>) => {
           const order = payload.new as Order
 
           // Fetch full record to confirm it's still pending
@@ -119,7 +120,7 @@ export function useRealtimeOrders(vendorId: string | undefined) {
           table: 'orders',
           filter: `vendor_id=eq.${vendorId}`,
         },
-        (payload) => {
+        (payload: RealtimePostgresChangesPayload<Order>) => {
           const order = payload.new as Order
           updateOrderStatus(order.id, order.status)
         }
