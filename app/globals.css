@@ -12,8 +12,8 @@
   --color-kapzo-dark-muted: rgba(2, 33, 53, 0.08);
 
   /* Typography */
-  --font-sans: "DM Sans", "Sora", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Sora", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-neulis-alt), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-neulis-alt), ui-sans-serif, system-ui, sans-serif;
 
   /* Border Radius */
   --radius-card: 12px;
@@ -48,7 +48,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "DM Sans", "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-neulis-alt), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

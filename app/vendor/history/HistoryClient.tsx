@@ -104,7 +104,7 @@ function getPageNums(current: number, total: number): (number | '…')[] {
 ═══════════════════════════════════════════════════════════ */
 function useCountUp(target: number, durationMs = 700): number {
   const [displayed, setDisplayed] = useState(0)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number>(0)
 
   useEffect(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)

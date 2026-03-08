@@ -1,19 +1,11 @@
 import type { Metadata } from 'next'
-import { DM_Sans, Sora } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
-const dmSans = DM_Sans({
-  variable: '--font-dm-sans',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  display: 'swap',
-})
-
-const sora = Sora({
-  variable: '--font-sora',
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const neulisAlt = localFont({
+  src: '../public/fonts/neulisalt-medium.ttf',
+  variable: '--font-neulis-alt',
   display: 'swap',
 })
 
@@ -24,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${sora.variable}`}>
-      <body className="font-sans antialiased bg-white text-[#022135]">
+    <html lang="en" className={neulisAlt.variable}>
+      <body className="font-[family-name:var(--font-neulis-alt)] antialiased bg-white text-[#022135]">
         {children}
         <Toaster
           position="top-right"

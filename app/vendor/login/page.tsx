@@ -292,7 +292,7 @@ export default function VendorLoginPage() {
 
           <p className="mt-8 text-center text-xs text-slate-400">
             New pharmacy?{' '}
-            <a href="mailto:partner@kapzo.in" className="text-[#21A053] font-medium hover:underline">
+            <a href="mailto:info@kapzo.in" className="text-[#21A053] font-medium hover:underline">
               Apply to partner with Kapzo
             </a>
           </p>
