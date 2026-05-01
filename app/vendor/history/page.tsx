@@ -1,8 +1,14 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { HistoryClient } from './HistoryClient'
+import { isDemoMode, DEMO_VENDOR_ID } from '@/lib/demo'
 
 export default async function HistoryPage() {
+  /* ── Demo mode ── */
+  if (isDemoMode) {
+    return <HistoryClient vendorId={DEMO_VENDOR_ID} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/vendor/login')

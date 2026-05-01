@@ -2,8 +2,20 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { OrdersClient } from './OrdersClient'
 import type { OrderWithItems } from './OrdersClient'
+import { isDemoMode, DEMO_VENDOR_ID, getDemoActiveOrders, getDemoClosedOrders } from '@/lib/demo'
 
 export default async function OrdersPage() {
+  /* ── Demo mode ── */
+  if (isDemoMode) {
+    return (
+      <OrdersClient
+        vendorId={DEMO_VENDOR_ID}
+        initialActive={getDemoActiveOrders() as unknown as OrderWithItems[]}
+        initialClosed={getDemoClosedOrders()}
+      />
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/vendor/login')
@@ -28,7 +40,7 @@ export default async function OrdersPage() {
     /* Closed orders — no items needed for list view */
     supabase
       .from('orders')
-      .select('id, vendor_id, customer_id, rider_id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified')
+      .select('id, vendor_id, customer_id, rider_id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified, prescription_url')
       .eq('vendor_id', vendor.id)
       .in('status', ['delivered', 'rejected', 'cancelled'])
       .order('updated_at', { ascending: false })

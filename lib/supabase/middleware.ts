@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database.types'
 
 export async function updateSession(request: NextRequest) {
+  // In demo mode skip all Supabase auth entirely
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient<Database>(

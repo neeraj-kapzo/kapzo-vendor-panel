@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 760" width="560" height="760" font-family="Georgia, serif">
+  <!-- Page background -->
+  <rect width="560" height="760" fill="#fff" rx="4"/>
+
+  <!-- Header band -->
+  <rect width="560" height="100" fill="#022135" rx="4"/>
+  <rect y="96" width="560" height="4" fill="#21A053"/>
+
+  <!-- Clinic name -->
+  <text x="280" y="42" font-size="20" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">City Medical Centre</text>
+  <text x="280" y="62" font-size="11" fill="#a8c5d6" text-anchor="middle" font-family="Arial, sans-serif">Dr. R. Kapoor — MBBS, MD (General Medicine)</text>
+  <text x="280" y="80" font-size="10" fill="#6e9bb5" text-anchor="middle" font-family="Arial, sans-serif">12-B, Linking Road, Bandra West, Mumbai 400 050  |  Tel: +91 98765 43210</text>
+
+  <!-- Rx symbol -->
+  <text x="40" y="160" font-size="52" font-weight="bold" fill="#21A053" font-family="Arial, sans-serif">℞</text>
+  <line x1="80" y1="170" x2="520" y2="170" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- Patient info labels -->
+  <text x="40" y="200" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold">PATIENT NAME</text>
+  <text x="40" y="218" font-size="13" fill="#022135" font-family="Arial, sans-serif">Rahul Mehta</text>
+
+  <text x="300" y="200" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold">DATE</text>
+  <text x="300" y="218" font-size="13" fill="#022135" font-family="Arial, sans-serif">22 Mar 2025</text>
+
+  <text x="40" y="248" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold">AGE / GENDER</text>
+  <text x="40" y="266" font-size="13" fill="#022135" font-family="Arial, sans-serif">34 Yrs / Male</text>
+
+  <text x="300" y="248" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold">WEIGHT</text>
+  <text x="300" y="266" font-size="13" fill="#022135" font-family="Arial, sans-serif">72 kg</text>
+
+  <line x1="40" y1="280" x2="520" y2="280" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- Medicines header -->
+  <text x="40" y="308" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold" letter-spacing="1">MEDICATIONS</text>
+
+  <!-- Medicine 1 -->
+  <circle cx="48" cy="338" r="5" fill="#21A053"/>
+  <text x="62" y="342" font-size="14" fill="#022135" font-family="Arial, sans-serif" font-weight="bold">Azithromycin 500 mg</text>
+  <text x="62" y="358" font-size="11" fill="#475569" font-family="Arial, sans-serif">1 tablet once daily × 5 days — after food</text>
+
+  <!-- Medicine 2 -->
+  <circle cx="48" cy="388" r="5" fill="#21A053"/>
+  <text x="62" y="392" font-size="14" fill="#022135" font-family="Arial, sans-serif" font-weight="bold">Paracetamol 500 mg (Dolo)</text>
+  <text x="62" y="408" font-size="11" fill="#475569" font-family="Arial, sans-serif">1 tablet every 6 hours as needed for fever — max 4/day</text>
+
+  <!-- Medicine 3 -->
+  <circle cx="48" cy="438" r="5" fill="#21A053"/>
+  <text x="62" y="442" font-size="14" fill="#022135" font-family="Arial, sans-serif" font-weight="bold">Omeprazole 20 mg</text>
+  <text x="62" y="458" font-size="11" fill="#475569" font-family="Arial, sans-serif">1 capsule before breakfast × 7 days</text>
+
+  <!-- Medicine 4 -->
+  <circle cx="48" cy="488" r="5" fill="#21A053"/>
+  <text x="62" y="492" font-size="14" fill="#022135" font-family="Arial, sans-serif" font-weight="bold">Cetirizine 10 mg</text>
+  <text x="62" y="508" font-size="11" fill="#475569" font-family="Arial, sans-serif">1 tablet at bedtime × 5 days</text>
+
+  <line x1="40" y1="530" x2="520" y2="530" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- Special instructions -->
+  <text x="40" y="556" font-size="10" fill="#64748b" font-family="Arial, sans-serif" font-weight="bold" letter-spacing="1">SPECIAL INSTRUCTIONS</text>
+  <text x="40" y="576" font-size="11" fill="#475569" font-family="Arial, sans-serif">• Drink plenty of fluids. Avoid cold drinks.</text>
+  <text x="40" y="594" font-size="11" fill="#475569" font-family="Arial, sans-serif">• Rest adequately. Avoid strenuous activity.</text>
+  <text x="40" y="612" font-size="11" fill="#475569" font-family="Arial, sans-serif">• Follow up in 7 days or if symptoms worsen.</text>
+
+  <!-- Signature area -->
+  <line x1="360" y1="700" x2="520" y2="700" stroke="#022135" stroke-width="1.5"/>
+  <text x="440" y="718" font-size="10" fill="#64748b" font-family="Arial, sans-serif" text-anchor="middle">Signature &amp; Stamp</text>
+  <text x="440" y="732" font-size="10" fill="#022135" font-family="Arial, sans-serif" text-anchor="middle" font-weight="bold">Dr. R. Kapoor</text>
+
+  <!-- Footer -->
+  <rect y="740" width="560" height="20" fill="#f1f5f9"/>
+  <text x="280" y="754" font-size="9" fill="#94a3b8" text-anchor="middle" font-family="Arial, sans-serif">This is a sample prescription generated for demo purposes only.</text>
+</svg>

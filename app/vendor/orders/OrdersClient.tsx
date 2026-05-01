@@ -3,11 +3,14 @@
 import { useState, useEffect, Fragment } from 'react'
 import {
   ShoppingBag, Clock, X, AlertTriangle, Package,
-  FileText, CheckCircle2, ChevronRight, Loader2,
+  FileText, CheckCircle2, ChevronRight, Loader2, FlaskConical,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { OrderStatusBadge } from '@/components/ui/Badge'
+import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
 import { createClient } from '@/lib/supabase/client'
+import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
+import { useDemoStore } from '@/lib/demo/demoStore'
 import { cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { Order, OrderItem, CatalogItem, OrderStatus } from '@/types/database.types'
@@ -66,6 +69,11 @@ function deadlineMs(order: Order) {
   return new Date(order.created_at).getTime() + TIMEOUT_SECS * 1_000
 }
 
+/** True when the vendor accept window has passed; order may still be `pending` until server auto-rejects. */
+function isAcceptWindowExpired(order: Order, nowMs: number) {
+  return nowMs >= deadlineMs(order)
+}
+
 function fmtCountdown(secs: number) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
 }
@@ -93,6 +101,7 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
     Math.max(0, Math.ceil((dl - Date.now()) / 1_000))
   )
   const expired = timeLeft === 0
+  const [rxOpen, setRxOpen] = useState(false)
 
   useEffect(() => {
     const tick = () => setTimeLeft(Math.max(0, Math.ceil((dl - Date.now()) / 1_000)))
@@ -116,26 +125,25 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
       : timeLeft <= 60 ? 'border-amber-400 shadow-[0_0_0_4px_rgba(245,158,11,0.1)]'
       : 'border-[#21A053] shadow-[0_0_0_4px_rgba(33,160,83,0.1)]'
     )}>
-      {/* Header strip */}
-      <div className={cn(
-        'flex items-center justify-between px-5 py-2.5',
-        expired    ? 'bg-slate-500 text-white'
-        : isUrgent  ? 'bg-red-500 text-white'
-        : timeLeft <= 60 ? 'bg-amber-500 text-white'
-        : 'bg-[#21A053] text-white'
-      )}>
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          {!expired && <span className="animate-pulse">●</span>}
-          {expired
-            ? 'Order Expired — Awaiting server auto-reject'
-            : `New Order — Accept within ${fmtCountdown(timeLeft)}`}
-        </span>
-        {queueCount > 0 && (
-          <span className="bg-white/25 px-2 py-0.5 rounded-full text-xs font-bold">
-            +{queueCount} waiting
+      {/* Header strip — hidden once timer expires (no alert banner) */}
+      {!expired && (
+        <div className={cn(
+          'flex items-center justify-between px-5 py-2.5',
+          isUrgent  ? 'bg-red-500 text-white'
+          : timeLeft <= 60 ? 'bg-amber-500 text-white'
+          : 'bg-[#21A053] text-white'
+        )}>
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <span className="animate-pulse">●</span>
+            {`New Order — Accept within ${fmtCountdown(timeLeft)}`}
           </span>
-        )}
-      </div>
+          {queueCount > 0 && (
+            <span className="bg-white/25 px-2 py-0.5 rounded-full text-xs font-bold">
+              +{queueCount} waiting
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Body */}
       <div className="bg-white p-5 flex flex-col sm:flex-row gap-6 items-start">
@@ -178,14 +186,30 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
               #{order.id.slice(-6).toUpperCase()}
             </span>
             {order.prescription_verified && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full">
-                <FileText size={10} /> Rx Verified
-              </span>
+              order.prescription_url ? (
+                <button
+                  onClick={() => setRxOpen(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full hover:bg-[#21A053]/20 transition-colors"
+                >
+                  <FileText size={10} /> Rx Verified · View
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full">
+                  <FileText size={10} /> Rx Verified
+                </span>
+              )
             )}
             <span className="text-xs text-slate-400 flex items-center gap-1">
               <Clock size={11} /> {timeAgo(order.created_at)}
             </span>
           </div>
+          {rxOpen && order.prescription_url && (
+            <PrescriptionViewer
+              url={order.prescription_url}
+              orderId={order.id}
+              onClose={() => setRxOpen(false)}
+            />
+          )}
 
           {/* Items preview */}
           <div className="bg-slate-50 rounded-xl overflow-hidden divide-y divide-slate-100">
@@ -219,18 +243,28 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2 pt-1">
+          <div className={cn('flex gap-2 pt-1', order.prescription_url && 'flex-wrap')}>
             <button
               onClick={onReject}
               disabled={busy}
-              className="flex-1 h-11 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
+              className="flex-1 min-w-[100px] h-11 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
             >
               Reject
             </button>
+            {order.prescription_url && (
+              <button
+                type="button"
+                onClick={() => setRxOpen(true)}
+                className="flex-1 min-w-[100px] h-11 rounded-xl border border-[#00326F]/25 text-[#00326F] text-sm font-semibold hover:bg-[#00326F]/5 active:bg-[#00326F]/10 transition-colors inline-flex items-center justify-center gap-1.5"
+              >
+                <FileText size={15} className="shrink-0" />
+                View prescription
+              </button>
+            )}
             <button
               onClick={onAccept}
               disabled={busy || expired}
-              className="flex-1 h-11 rounded-xl bg-[#21A053] text-white text-sm font-bold hover:bg-[#178040] active:bg-[#178040] transition-colors disabled:opacity-50 shadow-[0_2px_12px_rgba(33,160,83,0.3)]"
+              className="flex-1 min-w-[100px] h-11 rounded-xl bg-[#21A053] text-white text-sm font-bold hover:bg-[#178040] active:bg-[#178040] transition-colors disabled:opacity-50 shadow-[0_2px_12px_rgba(33,160,83,0.3)]"
             >
               {busy
                 ? <Loader2 size={16} className="animate-spin mx-auto" />
@@ -305,6 +339,7 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
   const action    = ACTION_CONFIG[order.status]
   const canReject = ['pending', 'accepted', 'packing'].includes(order.status)
   const showSteps = STATUS_STEPS.includes(order.status as OrderStatus)
+  const [rxOpen, setRxOpen] = useState(false)
 
   return (
     <>
@@ -356,11 +391,27 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
               Placed {timeAgo(order.created_at)} — {formatDate(order.created_at)}
             </span>
             {order.prescription_verified && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full">
-                <FileText size={10} /> Rx Verified
-              </span>
+              order.prescription_url ? (
+                <button
+                  onClick={() => setRxOpen(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full hover:bg-[#21A053]/20 transition-colors"
+                >
+                  <FileText size={10} /> Rx Verified · View
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full">
+                  <FileText size={10} /> Rx Verified
+                </span>
+              )
             )}
           </div>
+          {rxOpen && order.prescription_url && (
+            <PrescriptionViewer
+              url={order.prescription_url}
+              orderId={order.id}
+              onClose={() => setRxOpen(false)}
+            />
+          )}
 
           {/* Items table */}
           <div className="px-5 py-4 border-b border-slate-100">
@@ -666,9 +717,35 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
   const [busyId, setBusyId]               = useState<string | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
-  /* ── Pending queue for timer ── */
+  /* ── Demo store — sync simulated orders added from Dashboard ── */
+  const { simulatedOrders, addSimulatedOrder } = useDemoStore()
+
+  useEffect(() => {
+    if (!isDemoMode) return
+    setActiveOrders((prev) => {
+      const incoming = simulatedOrders.filter(
+        (o) => !prev.some((p) => p.id === o.id)
+      ) as unknown as OrderWithItems[]
+      if (!incoming.length) return prev
+      return [...incoming, ...prev].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    })
+  }, [simulatedOrders])
+
+  /* Clock for pending queue — re-filter when accept window expires so the next order surfaces */
+  const [now, setNow] = useState(() => Date.now())
+  const hasPendingOrder = activeOrders.some((o) => o.status === 'pending')
+  useEffect(() => {
+    if (!hasPendingOrder) return
+    const id = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(id)
+  }, [hasPendingOrder])
+
+  /* ── Pending queue for timer (skip orders whose countdown already ended client-side) ── */
   const pendingQueue = activeOrders
     .filter((o) => o.status === 'pending')
+    .filter((o) => !isAcceptWindowExpired(o, now))
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   const currentPending = pendingQueue[0]
   const queueCount     = pendingQueue.length - 1
@@ -684,8 +761,10 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     return data as OrderWithItems | null
   }
 
-  /* ── Realtime subscription ── */
+  /* ── Realtime subscription — skipped in demo mode ── */
   useEffect(() => {
+    if (isDemoMode) return
+
     const supabase = createClient()
 
     const channel = supabase
@@ -734,10 +813,11 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId])
 
-  /* ── Open detail (fetch items if needed) ── */
+  /* ── Open detail (demo: already has items; real: fetch if needed) ── */
   async function openDetail(orderId: string) {
     const cached = activeOrders.find((o) => o.id === orderId)
     if (cached) { setSelectedOrder(cached); return }
+    if (isDemoMode) return
     setLoadingDetail(true)
     const full = await fetchOrderWithItems(orderId)
     setLoadingDetail(false)
@@ -748,6 +828,15 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
   async function advanceStatus(order: OrderWithItems) {
     const next = STATUS_FLOW[order.status]
     if (!next) return
+
+    if (isDemoMode) {
+      setActiveOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: next } : o))
+      setSelectedOrder((prev) => prev?.id === order.id ? { ...prev, status: next } : prev)
+      if (next === 'accepted')    toast.success('Order accepted!')
+      else if (next === 'packed') toast.success('Order packed — notifying riders', { icon: '🛵' })
+      else                        toast.success(`Order is now ${next}`)
+      return
+    }
 
     setBusyId(order.id)
     const supabase = createClient()
@@ -773,8 +862,23 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
 
   /* ── Reject order ── */
   async function rejectOrder(orderId: string, reason: string) {
+    const found = activeOrders.find((o) => o.id === orderId)
+
+    if (isDemoMode) {
+      setActiveOrders((prev) => prev.filter((o) => o.id !== orderId))
+      if (found) {
+        setClosedOrders((prev) => [
+          { ...found, status: 'rejected', rejection_reason: reason },
+          ...prev,
+        ])
+      }
+      setRejectTarget(null)
+      setSelectedOrder((prev) => prev?.id === orderId ? null : prev)
+      toast.success('Order rejected')
+      return
+    }
+
     setBusyId(orderId)
-    const found   = activeOrders.find((o) => o.id === orderId)
     const supabase = createClient()
 
     const { error } = await supabase
@@ -801,6 +905,13 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     setBusyId(null)
   }
 
+  /* ── Demo: add a new simulated order directly on this page ── */
+  function simulateNewOrder() {
+    const order = generateDemoSimulatedOrder()
+    addSimulatedOrder(order)
+    toast.success('Simulated order added to the queue')
+  }
+
   /* ── Tab config ── */
   const tabData: Record<Tab, (OrderWithItems | Order)[]> = {
     active:    activeOrders,
@@ -824,7 +935,7 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     <div className="space-y-5 max-w-4xl mx-auto">
 
       {/* ── Page header ── */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-[#022135]">Orders</h1>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -836,11 +947,22 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
             )}
           </p>
         </div>
-        {loadingDetail && (
-          <span className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Loader2 size={13} className="animate-spin" /> Loading…
-          </span>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {isDemoMode && (
+            <button
+              onClick={simulateNewOrder}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_2px_12px_rgba(245,158,11,0.35)]"
+            >
+              <FlaskConical size={15} />
+              Simulate New Order
+            </button>
+          )}
+          {loadingDetail && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Loader2 size={13} className="animate-spin" /> Loading…
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── V-05: Pending timer card ── */}

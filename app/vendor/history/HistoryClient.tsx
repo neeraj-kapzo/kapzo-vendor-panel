@@ -8,6 +8,7 @@ import {
   IndianRupee, ShoppingBag, TrendingUp, Loader2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { isDemoMode, getDemoHistoryOrders } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { OrderStatus } from '@/types/database.types'
@@ -413,8 +414,25 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
 
     setLoading(true)
     const [from, to] = getDateRange(preset, customFrom, customTo)
-    const offset     = (page - 1) * PAGE_SIZE
-    const supabase   = createClient()
+
+    /* ── Demo mode: filter mock data instead of querying Supabase ── */
+    if (isDemoMode) {
+      const all      = getDemoHistoryOrders()
+      const filtered = all.filter((o) => o.updated_at >= from && o.updated_at <= to)
+      const offset   = (page - 1) * PAGE_SIZE
+      setOrders(filtered.slice(offset, offset + PAGE_SIZE) as unknown as HistoryOrder[])
+      setTotal(filtered.length)
+      const delivered = filtered.filter((o) => o.status === 'delivered')
+      setSummary({
+        orders:  delivered.length,
+        revenue: delivered.reduce((s, o) => s + o.total_amount, 0),
+      })
+      setLoading(false)
+      return
+    }
+
+    const offset   = (page - 1) * PAGE_SIZE
+    const supabase = createClient()
 
     const [tableRes, summaryRes, countRes] = await Promise.all([
       /* Paginated table rows with items */
@@ -471,7 +489,41 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
   async function handleExport() {
     setExporting(true)
     const [from, to] = getDateRange(preset, customFrom, customTo)
-    const supabase   = createClient()
+
+    // Demo mode — export from mock data
+    if (isDemoMode) {
+      const all     = getDemoHistoryOrders()
+      const data    = all.filter((o) => o.updated_at >= from && o.updated_at <= to)
+      if (data.length > 0) {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const rows = (data as any[]).map((o) => [
+          o.id,
+          format(new Date(o.updated_at), 'd MMM yyyy, h:mm a'),
+          (o.order_items as any[]).map((i: any) => `${i.catalog_item.name} x${i.quantity}`).join('; '),
+          o.total_amount.toFixed(2),
+          o.status,
+          o.rejection_reason ?? '',
+        ])
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+        const header = ['Order ID', 'Date', 'Items', 'Total (INR)', 'Status', 'Rejection Reason']
+        const csv    = [header, ...rows]
+          .map((r) => r.map((c: unknown) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+          .join('\n')
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+        const url  = URL.createObjectURL(blob)
+        const a    = document.createElement('a')
+        a.href = url; a.download = `kapzo-history-${todayStr()}.csv`
+        document.body.appendChild(a); a.click()
+        document.body.removeChild(a); URL.revokeObjectURL(url)
+        toast.success(`Exported ${data.length} orders`)
+      } else {
+        toast.error('No orders to export')
+      }
+      setExporting(false)
+      return
+    }
+
+    const supabase = createClient()
 
     const { data } = await supabase
       .from('orders')

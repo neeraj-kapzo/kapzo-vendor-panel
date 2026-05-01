@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Toggle } from '@/components/ui/Toggle'
 import { createClient } from '@/lib/supabase/client'
+import { isDemoMode } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -205,6 +206,9 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
     /* Optimistic flip */
     updateItem(catalogId, { is_available: next })
 
+    // Demo mode — no Supabase, local state is sufficient
+    if (isDemoMode) return
+
     const supabase = createClient()
     let error: { message: string } | null = null
 
@@ -250,6 +254,13 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
     setItems((prev) =>
       prev.map((i) => ids.includes(i.catalog_id) ? { ...i, is_available: available } : i)
     )
+
+    // Demo mode — local update is all we need
+    if (isDemoMode) {
+      toast.success(`${ids.length} item${ids.length > 1 ? 's' : ''} marked ${available ? 'available' : 'unavailable'}`)
+      setSelectedIds(new Set())
+      return
+    }
 
     setBulkBusy(true)
     const supabase = createClient()
@@ -303,6 +314,14 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
   /* ── Save price + stock changes ── */
   const saveChanges = useCallback(async () => {
     if (!dirtyItems.length || hasErrors) return
+
+    // Demo mode — just clear the dirty flags
+    if (isDemoMode) {
+      setItems((prev) => prev.map((i) => ({ ...i, isDirty: false })))
+      toast.success('Inventory saved')
+      return
+    }
+
     setSaving(true)
 
     const toUpdate = dirtyItems.filter((i) => i.inv_id)

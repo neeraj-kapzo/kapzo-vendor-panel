@@ -1,8 +1,21 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardClient } from './DashboardClient'
+import { isDemoMode, DEMO_VENDOR, getDemoActiveOrders, getDemoStats } from '@/lib/demo'
 
 export default async function DashboardPage() {
+  /* ── Demo mode — bypass Supabase entirely ── */
+  if (isDemoMode) {
+    const { todayCount, todayRevenue, pendingCount, acceptanceRate } = getDemoStats()
+    return (
+      <DashboardClient
+        vendor={DEMO_VENDOR}
+        initialStats={{ todayCount, todayRevenue, pendingCount, acceptanceRate }}
+        initialOrders={getDemoActiveOrders()}
+      />
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/vendor/login')
@@ -51,7 +64,7 @@ export default async function DashboardPage() {
     /* active orders feed — include item count via inner join */
     supabase
       .from('orders')
-      .select('id, vendor_id, customer_id, rider_id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified')
+      .select('id, vendor_id, customer_id, rider_id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified, prescription_url')
       .eq('vendor_id', vendor.id)
       .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
       .order('created_at', { ascending: false })

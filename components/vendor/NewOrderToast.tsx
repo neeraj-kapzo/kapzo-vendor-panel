@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ShoppingBag, X, ArrowRight } from 'lucide-react'
+import { ShoppingBag, X, ArrowRight, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { formatCurrency, timeAgo } from '@/lib/utils'
+import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
 import type { Order } from '@/types/database.types'
 
 interface NewOrderAlert {
@@ -36,6 +37,7 @@ function NewOrderToastItem({
 }) {
   const [visible, setVisible] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [rxOpen, setRxOpen] = useState(false)
 
   useEffect(() => {
     const show = setTimeout(() => setVisible(true), 10)
@@ -82,6 +84,22 @@ function NewOrderToastItem({
               <span className="text-xs text-slate-400">{timeAgo(alert.order.created_at)}</span>
               <span className="text-xs font-bold text-[#022135]">{formatCurrency(alert.order.total_amount)}</span>
             </div>
+            {alert.order.prescription_verified && (
+              <div className="mt-1.5">
+                {alert.order.prescription_url ? (
+                  <button
+                    onClick={() => setRxOpen(true)}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full hover:bg-[#21A053]/20 transition-colors"
+                  >
+                    <FileText size={10} /> Rx Verified · View
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2 py-0.5 rounded-full">
+                    <FileText size={10} /> Rx Verified
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -93,6 +111,13 @@ function NewOrderToastItem({
           View Order <ArrowRight size={12} />
         </Link>
       </div>
+      {rxOpen && alert.order.prescription_url && (
+        <PrescriptionViewer
+          url={alert.order.prescription_url}
+          orderId={alert.order.id}
+          onClose={() => setRxOpen(false)}
+        />
+      )}
     </div>
   )
 }

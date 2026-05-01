@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Clock, Ban } from 'lucide-react'
+import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Clock, Ban, FlaskConical } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 import { OtpInput } from '@/components/auth/OtpInput'
 import { cn } from '@/lib/utils'
+import { isDemoMode } from '@/lib/demo'
 import toast from 'react-hot-toast'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -290,7 +291,27 @@ export default function VendorLoginPage() {
             </div>
           )}
 
-          <p className="mt-8 text-center text-xs text-slate-400">
+          {isDemoMode && (
+            <div className="mt-6">
+              <div className="relative flex items-center gap-3 mb-4">
+                <div className="flex-1 border-t border-slate-200" />
+                <span className="text-xs text-slate-400 font-medium shrink-0">or</span>
+                <div className="flex-1 border-t border-slate-200" />
+              </div>
+              <button
+                onClick={() => router.push('/vendor/dashboard')}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[#21A053]/40 text-sm font-semibold text-[#21A053] hover:bg-[#21A053]/6 hover:border-[#21A053]/70 transition-all"
+              >
+                <FlaskConical size={16} />
+                Enter Demo Mode
+              </button>
+              <p className="text-center text-[11px] text-slate-400 mt-2">
+                Explore the dashboard with sample data — no login required
+              </p>
+            </div>
+          )}
+
+          <p className="mt-6 text-center text-xs text-slate-400">
             New pharmacy?{' '}
             <a href="mailto:info@kapzo.in" className="text-[#21A053] font-medium hover:underline">
               Apply to partner with Kapzo

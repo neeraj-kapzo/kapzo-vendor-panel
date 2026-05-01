@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { Modal } from '@/components/ui/Modal'
+import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -18,6 +19,15 @@ export function OnlineToggle({ variant = 'prominent' }: OnlineToggleProps) {
 
   async function applyToggle(online: boolean) {
     if (!vendor) return
+
+    // Demo mode — update local state only, no Supabase
+    if (isDemoMode) {
+      setIsOnline(online)
+      toast.success(online ? "You're live — accepting orders" : "You're now offline")
+      setConfirmOpen(false)
+      return
+    }
+
     setLoading(true)
     const supabase = createClient()
     const { error } = await supabase

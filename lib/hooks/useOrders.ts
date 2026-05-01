@@ -3,6 +3,7 @@
 import { useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useVendorStore } from '@/lib/store/vendorStore'
+import { isDemoMode } from '@/lib/demo'
 import type { Order } from '@/types/database.types'
 
 /**
@@ -13,7 +14,8 @@ export function useOrders(vendorId: string | undefined) {
   const { activeOrders, setActiveOrders } = useVendorStore()
 
   const fetchOrders = useCallback(async () => {
-    if (!vendorId) return
+    // In demo mode the store is seeded by the server page; skip Supabase
+    if (!vendorId || isDemoMode) return
     const supabase = createClient()
     const { data } = await supabase
       .from('orders')
@@ -29,9 +31,9 @@ export function useOrders(vendorId: string | undefined) {
     fetchOrders()
   }, [fetchOrders])
 
-  // Real-time subscription (catch-all fallback)
+  // Real-time subscription (catch-all fallback) — skipped in demo mode
   useEffect(() => {
-    if (!vendorId) return
+    if (!vendorId || isDemoMode) return
     const supabase = createClient()
 
     const channel = supabase

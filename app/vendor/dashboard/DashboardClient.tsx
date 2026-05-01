@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { ShoppingBag, IndianRupee, Clock, TrendingUp } from 'lucide-react'
+import { ShoppingBag, IndianRupee, Clock, TrendingUp, FlaskConical } from 'lucide-react'
 import { StatsCard } from '@/components/vendor/StatsCard'
 import { OrderFeedCard } from '@/components/vendor/OrderFeedCard'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
@@ -9,6 +9,8 @@ import { NewOrderToastContainer } from '@/components/vendor/NewOrderToast'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useOrders } from '@/lib/hooks/useOrders'
 import { createClient } from '@/lib/supabase/client'
+import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
+import { useDemoStore } from '@/lib/demo/demoStore'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
@@ -72,6 +74,9 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
   const [statsLoading, setStatsLoading] = useState(false)
   const [alerts, setAlerts]           = useState<NewOrderAlert[]>([])
 
+  /* ── Demo store (noop when not in demo mode) ── */
+  const { addSimulatedOrder } = useDemoStore()
+
   /* ── Seed zustand store from server props ── */
   useEffect(() => {
     setVendor(vendor)
@@ -81,8 +86,9 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
   /* ── Live orders feed + realtime (handled by hook, synced to store) ── */
   useOrders(vendor.id)
 
-  /* ── Stats refresh every 30 s ── */
+  /* ── Stats refresh every 30 s — skip in demo mode ── */
   const refreshStats = useCallback(async () => {
+    if (isDemoMode) return
     setStatsLoading(true)
     const supabase     = createClient()
     const todayStart   = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -118,12 +124,15 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
   }, [vendor.id])
 
   useEffect(() => {
+    if (isDemoMode) return
     const id = setInterval(refreshStats, 30_000)
     return () => clearInterval(id)
   }, [refreshStats])
 
-  /* ── Incoming order alert subscription (INSERT only) ── */
+  /* ── Incoming order alert subscription (INSERT only) — skip in demo mode ── */
   useEffect(() => {
+    if (isDemoMode) return
+
     const supabase = createClient()
     let titleInterval: ReturnType<typeof setInterval> | null = null
 
@@ -171,6 +180,30 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
     setAlerts((prev) => prev.filter((a) => a.id !== id))
   }
 
+  /* ── Demo: simulate a new incoming order ── */
+  function simulateNewOrder() {
+    const order = generateDemoSimulatedOrder()
+
+    // Add to demo store so OrdersClient can pick it up
+    addSimulatedOrder(order)
+
+    // Trigger the notification UI on this page
+    setAlerts((prev) => [...prev, { id: order.id, order: order as unknown as Order }])
+    playAlertBeep()
+
+    // Flash tab title for 8 seconds
+    const original = document.title
+    let on = true
+    const interval = setInterval(() => {
+      document.title = on ? '🔔 New Order!' : 'Kapzo Vendor'
+      on = !on
+    }, 1_000)
+    setTimeout(() => {
+      clearInterval(interval)
+      document.title = original
+    }, 8_000)
+  }
+
   return (
     <>
       {/* Sliding toast alerts — fixed top-right, outside normal flow */}
@@ -179,14 +212,27 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
       <div className="space-y-6 max-w-7xl mx-auto">
 
         {/* ── Page header ── */}
-        <div>
-          <h1 className="text-xl font-bold text-[#022135]">
-            Good {getGreeting()},{' '}
-            <span className="kapzo-gradient-text">{vendor.contact_person.split(' ')[0]}</span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Here&apos;s what&apos;s happening at <strong className="text-[#022135] font-semibold">{vendor.pharmacy_name}</strong> today.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-[#022135]">
+              Good {getGreeting()},{' '}
+              <span className="kapzo-gradient-text">{vendor.contact_person.split(' ')[0]}</span>
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Here&apos;s what&apos;s happening at <strong className="text-[#022135] font-semibold">{vendor.pharmacy_name}</strong> today.
+            </p>
+          </div>
+
+          {/* Demo simulate button */}
+          {isDemoMode && (
+            <button
+              onClick={simulateNewOrder}
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_2px_12px_rgba(245,158,11,0.35)]"
+            >
+              <FlaskConical size={15} />
+              Simulate New Order
+            </button>
+          )}
         </div>
 
         {/* ── Online / Offline toggle (prominent V-02) ── */}
@@ -231,7 +277,9 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-base font-semibold text-[#022135]">Active Orders</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Updates in real-time</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isDemoMode ? 'Simulated data' : 'Updates in real-time'}
+              </p>
             </div>
             <Link href="/vendor/orders">
               <Button variant="ghost" size="sm" className="text-[#21A053] font-semibold">

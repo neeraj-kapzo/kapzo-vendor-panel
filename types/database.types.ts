@@ -139,6 +139,7 @@ export interface Database {
           updated_at: string
           rejection_reason: string | null
           prescription_verified: boolean
+          prescription_url: string | null
         }
         Insert: {
           id?: string
@@ -151,6 +152,7 @@ export interface Database {
           updated_at?: string
           rejection_reason?: string | null
           prescription_verified?: boolean
+          prescription_url?: string | null
         }
         Update: {
           id?: string
@@ -163,6 +165,7 @@ export interface Database {
           updated_at?: string
           rejection_reason?: string | null
           prescription_verified?: boolean
+          prescription_url?: string | null
         }
         Relationships: [
           {

@@ -6,13 +6,14 @@ import Link from 'next/link'
 import Image from 'next/image'
 import {
   LayoutDashboard, ShoppingBag, Package,
-  Clock as HistoryIcon, LogOut, ChevronLeft,
+  Clock as HistoryIcon, LogOut, ChevronLeft, FlaskConical,
 } from 'lucide-react'
 import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
 import { createClient } from '@/lib/supabase/client'
+import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -37,6 +38,10 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
   if (SHELL_EXCLUDED.some((p) => pathname.startsWith(p))) return <>{children}</>
 
   async function handleLogout() {
+    if (isDemoMode) {
+      router.push('/vendor/login')
+      return
+    }
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/vendor/login')
@@ -166,6 +171,17 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
           sidebarOpen={sidebarOpen}
         />
+
+        {/* Demo mode banner */}
+        {isDemoMode && (
+          <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-400/15 border-b border-amber-300/40">
+            <FlaskConical size={13} className="text-amber-600 shrink-0" />
+            <p className="text-[11px] font-semibold text-amber-700">
+              Demo Mode — data is simulated and nothing is persisted
+            </p>
+          </div>
+        )}
+
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
           {children}
         </main>

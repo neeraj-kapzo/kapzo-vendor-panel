@@ -2,8 +2,19 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { InventoryClient } from './InventoryClient'
 import type { MergedInventoryItem } from './InventoryClient'
+import { isDemoMode, DEMO_VENDOR_ID, DEMO_INVENTORY } from '@/lib/demo'
 
 export default async function InventoryPage() {
+  /* ── Demo mode ── */
+  if (isDemoMode) {
+    return (
+      <InventoryClient
+        vendorId={DEMO_VENDOR_ID}
+        initialItems={DEMO_INVENTORY as MergedInventoryItem[]}
+      />
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/vendor/login')
