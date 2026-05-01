@@ -88,38 +88,38 @@ function PriceInput({
 /* ═══════════════════════════════════════════════════════════
    Stock stepper — number input with +/- buttons
 ═══════════════════════════════════════════════════════════ */
-function StockStepper({
-  value, onChange,
-}: {
-  value: string
-  onChange: (v: string) => void
-}) {
-  const num = parseInt(value, 10)
-
-  return (
-    <div className="flex items-center h-8 border border-slate-200 rounded-[8px] overflow-hidden">
-      <button
-        onClick={() => onChange(String(Math.max(0, (isNaN(num) ? 0 : num) - 1)))}
-        className="px-2 h-full text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors border-r border-slate-200"
-      >
-        <Minus size={12} />
-      </button>
-      <input
-        type="number"
-        min={0}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-12 h-full text-center text-xs text-[#022135] border-0 outline-none tabular-nums bg-white"
-      />
-      <button
-        onClick={() => onChange(String((isNaN(num) ? 0 : num) + 1))}
-        className="px-2 h-full text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors border-l border-slate-200"
-      >
-        <Plus size={12} />
-      </button>
-    </div>
-  )
-}
+// function StockStepper({
+//   value, onChange,
+// }: {
+//   value: string
+//   onChange: (v: string) => void
+// }) {
+//   const num = parseInt(value, 10)
+//
+//   return (
+//     <div className="flex items-center h-8 border border-slate-200 rounded-[8px] overflow-hidden">
+//       <button
+//         onClick={() => onChange(String(Math.max(0, (isNaN(num) ? 0 : num) - 1)))}
+//         className="px-2 h-full text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors border-r border-slate-200"
+//       >
+//         <Minus size={12} />
+//       </button>
+//       <input
+//         type="number"
+//         min={0}
+//         value={value}
+//         onChange={(e) => onChange(e.target.value)}
+//         className="w-12 h-full text-center text-xs text-[#022135] border-0 outline-none tabular-nums bg-white"
+//       />
+//       <button
+//         onClick={() => onChange(String((isNaN(num) ? 0 : num) + 1))}
+//         className="px-2 h-full text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors border-l border-slate-200"
+//       >
+//         <Plus size={12} />
+//       </button>
+//     </div>
+//   )
+// }
 
 /* ═══════════════════════════════════════════════════════════
    Medicine image — with pill-emoji fallback
@@ -559,7 +559,6 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
                   <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Medicine</th>
                   <th className="px-3 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">MRP</th>
                   <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Your Price</th>
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Stock</th>
                   <th className="px-3 py-3 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Available</th>
                 </tr>
               </thead>
@@ -622,14 +621,6 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
                         {priceInval && (
                           <p className="text-[9px] text-red-500 mt-0.5 font-medium">Exceeds MRP</p>
                         )}
-                      </td>
-
-                      {/* Stock qty — stepper */}
-                      <td className="px-3 py-3">
-                        <StockStepper
-                          value={item.stockStr}
-                          onChange={(v) => markDirty(item.catalog_id, { stockStr: v })}
-                        />
                       </td>
 
                       {/* Available toggle */}
