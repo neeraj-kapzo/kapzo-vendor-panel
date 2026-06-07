@@ -24,6 +24,9 @@ const navItems = [
   { label: 'History',      href: '/vendor/history',     icon: HistoryIcon,  badge: false },
   { label: 'Settlements',  href: '/vendor/settlements', icon: Wallet,       badge: false },
   { label: 'Help Centre',  href: '/vendor/help',        icon: HelpCircle,   badge: false },
+  { label: 'History',      href: '/vendor/history',     icon: HistoryIcon,  badge: false },
+  { label: 'Settlements',  href: '/vendor/settlements', icon: Wallet,       badge: false },
+  { label: 'Help Centre',  href: '/vendor/help',        icon: HelpCircle,   badge: false },
 ]
 
 /* Pages that render full-screen without the sidebar shell */
