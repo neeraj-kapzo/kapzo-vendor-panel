@@ -298,6 +298,82 @@ export function getDemoHistoryOrders(): DemoHistoryOrder[] {
   return orders
 }
 
+/* ── Settlements ─────────────────────────────────────────────────── */
+
+export type DemoSettlement = {
+  id:              string
+  vendor_id:       string
+  amount:          number
+  status:          'pending' | 'processing' | 'completed' | 'failed'
+  period_start:    string
+  period_end:      string
+  settled_at:      string | null
+  transaction_ref: string | null
+  notes:           string | null
+  created_at:      string
+}
+
+function makeSettlement(
+  id:          string,
+  weekOffset:  number,
+  amount:      number,
+  status:      DemoSettlement['status'],
+  opts?: { notes?: string }
+): DemoSettlement {
+  const now        = new Date()
+  const periodEnd  = new Date(now)
+  periodEnd.setDate(now.getDate() - weekOffset * 7)
+  periodEnd.setHours(23, 59, 59, 0)
+
+  const periodStart = new Date(periodEnd)
+  periodStart.setDate(periodEnd.getDate() - 6)
+  periodStart.setHours(0, 0, 0, 0)
+
+  const createdAt  = new Date(periodEnd.getTime() + 24 * 60 * 60 * 1000)
+
+  return {
+    id,
+    vendor_id:       DEMO_VENDOR_ID,
+    amount,
+    status,
+    period_start:    periodStart.toISOString(),
+    period_end:      periodEnd.toISOString(),
+    settled_at:      status === 'completed' ? new Date(createdAt.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString() : null,
+    transaction_ref: status === 'completed' ? `TXN${id.replace('settle-', '').toUpperCase()}${Math.floor(Math.random() * 90000 + 10000)}` : null,
+    notes:           opts?.notes ?? null,
+    created_at:      createdAt.toISOString(),
+  }
+}
+
+export const DEMO_SETTLEMENTS: DemoSettlement[] = [
+  makeSettlement('settle-01', 0,  1_840.50, 'pending',    { notes: 'Weekly settlement in progress' }),
+  makeSettlement('settle-02', 1,  2_315.00, 'processing', { notes: 'Bank transfer initiated' }),
+  makeSettlement('settle-03', 2,  1_975.50, 'completed'),
+  makeSettlement('settle-04', 3,  2_680.00, 'completed'),
+  makeSettlement('settle-05', 4,  1_520.00, 'completed'),
+  makeSettlement('settle-06', 5,  3_100.50, 'completed'),
+  makeSettlement('settle-07', 6,    890.00, 'failed',     { notes: 'Bank account verification pending' }),
+  makeSettlement('settle-08', 7,  2_445.00, 'completed'),
+  makeSettlement('settle-09', 8,  1_760.50, 'completed'),
+  makeSettlement('settle-10', 9,  2_220.00, 'completed'),
+  makeSettlement('settle-11', 10, 1_390.00, 'completed'),
+  makeSettlement('settle-12', 11, 2_875.50, 'completed'),
+]
+
+export function getDemoSettlementStats() {
+  const completed  = DEMO_SETTLEMENTS.filter((s) => s.status === 'completed')
+  const pending    = DEMO_SETTLEMENTS.filter((s) => s.status === 'pending')
+  const processing = DEMO_SETTLEMENTS.filter((s) => s.status === 'processing')
+  const failed     = DEMO_SETTLEMENTS.filter((s) => s.status === 'failed')
+
+  const totalSettled   = completed.reduce((s, r) => s + r.amount, 0)
+  const pendingAmount  = pending.reduce((s, r) => s + r.amount, 0) + processing.reduce((s, r) => s + r.amount, 0)
+  const completedCount = completed.length
+  const lastStatus     = DEMO_SETTLEMENTS[0]?.status ?? 'pending'
+
+  return { totalSettled, pendingAmount, completedCount, failedCount: failed.length, lastStatus }
+}
+
 /* ── Simulated order generator (for the "Simulate New Order" button) */
 
 const SIMULATE_ITEM_SETS: { catId: string; qty: number }[][] = [

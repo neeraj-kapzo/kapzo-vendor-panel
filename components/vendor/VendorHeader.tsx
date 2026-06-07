@@ -1,6 +1,7 @@
 'use client'
 
-import { Bell, Menu, X } from 'lucide-react'
+import { Bell, HelpCircle, Menu, X } from 'lucide-react'
+import Link from 'next/link'
 import { useVendorStore } from '@/lib/store/vendorStore'
 
 interface VendorHeaderProps {
@@ -34,6 +35,15 @@ export function VendorHeader({ onMenuToggle, sidebarOpen, title }: VendorHeaderP
         )}
 
         <div className="flex-1" />
+
+        {/* Help Centre */}
+        <Link
+          href="/vendor/help"
+          className="p-2 rounded-xl text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors"
+          title="Help Centre"
+        >
+          <HelpCircle size={18} />
+        </Link>
 
         {/* Notification bell */}
         <button className="relative p-2 rounded-xl text-slate-400 hover:text-[#022135] hover:bg-slate-100 transition-colors">
