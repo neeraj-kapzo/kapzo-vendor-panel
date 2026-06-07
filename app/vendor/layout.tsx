@@ -7,7 +7,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, ShoppingBag, Package,
   Clock as HistoryIcon, LogOut, ChevronLeft, FlaskConical,
-  UserCircle,
+  Wallet, HelpCircle, UserCircle,
 } from 'lucide-react'
 import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
@@ -21,7 +21,9 @@ const navItems = [
   { label: 'Dashboard', href: '/vendor/dashboard', icon: LayoutDashboard, badge: false },
   { label: 'Orders',    href: '/vendor/orders',    icon: ShoppingBag,     badge: true  },
   { label: 'Inventory', href: '/vendor/inventory', icon: Package,         badge: false },
-  { label: 'History',   href: '/vendor/history',   icon: HistoryIcon,     badge: false },
+  { label: 'History',      href: '/vendor/history',     icon: HistoryIcon,  badge: false },
+  { label: 'Settlements',  href: '/vendor/settlements', icon: Wallet,       badge: false },
+  { label: 'Help Centre',  href: '/vendor/help',        icon: HelpCircle,   badge: false },
 ]
 
 /* Pages that render full-screen without the sidebar shell */
