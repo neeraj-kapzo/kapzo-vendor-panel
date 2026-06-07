@@ -54,17 +54,26 @@ export const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 export const DEMO_VENDOR_ID = 'demo-vendor-001'
 
 export const DEMO_VENDOR: Vendor = {
-  id:              DEMO_VENDOR_ID,
-  user_id:         'demo-user-001',
-  pharmacy_name:   'Kapzo Demo Pharmacy',
-  contact_person:  'Arjun Sharma',
-  phone:           '9876543210',
-  email:           'demo@kapzo.in',
-  address:         '42, Linking Road, Bandra West, Mumbai 400050',
-  status:          'active',
-  is_online:       true,
-  license_url:     null,
-  created_at:      '2025-01-15T00:00:00.000Z',
+  id:                   DEMO_VENDOR_ID,
+  user_id:              'demo-user-001',
+  pharmacy_name:        'Kapzo Demo Pharmacy',
+  contact_person:       'Arjun Sharma',
+  phone:                '9876543210',
+  alt_phone:            '9123456789',
+  email:                'demo@kapzo.in',
+  address:              '42, Linking Road, Bandra West, Mumbai 400050',
+  status:               'active',
+  is_online:            true,
+  license_url:          null,
+  fssai_url:            null,
+  bank_account_holder:  'Arjun Sharma',
+  bank_name:            'State Bank of India',
+  bank_account_number:  '30987654321',
+  bank_ifsc:            'SBIN0001234',
+  working_hours_start:  '09:00',
+  working_hours_end:    '21:00',
+  working_days:         ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  created_at:           '2025-01-15T00:00:00.000Z',
 }
 
 /* ── Catalog ─────────────────────────────────────────────────────── */

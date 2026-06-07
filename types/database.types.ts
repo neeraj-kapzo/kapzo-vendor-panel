@@ -23,9 +23,18 @@ export interface Database {
           pharmacy_name: string
           email: string
           phone: string
+          alt_phone: string | null
           license_url: string | null
+          fssai_url: string | null
           contact_person: string
           address: string
+          bank_account_holder: string | null
+          bank_name: string | null
+          bank_account_number: string | null
+          bank_ifsc: string | null
+          working_hours_start: string | null
+          working_hours_end: string | null
+          working_days: string[] | null
           status: VendorStatus
           is_online: boolean
           created_at: string
@@ -36,9 +45,18 @@ export interface Database {
           pharmacy_name: string
           email: string
           phone: string
+          alt_phone?: string | null
           license_url?: string | null
+          fssai_url?: string | null
           contact_person: string
           address: string
+          bank_account_holder?: string | null
+          bank_name?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          working_hours_start?: string | null
+          working_hours_end?: string | null
+          working_days?: string[] | null
           status?: VendorStatus
           is_online?: boolean
           created_at?: string
@@ -49,9 +67,18 @@ export interface Database {
           pharmacy_name?: string
           email?: string
           phone?: string
+          alt_phone?: string | null
           license_url?: string | null
+          fssai_url?: string | null
           contact_person?: string
           address?: string
+          bank_account_holder?: string | null
+          bank_name?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          working_hours_start?: string | null
+          working_hours_end?: string | null
+          working_days?: string[] | null
           status?: VendorStatus
           is_online?: boolean
           created_at?: string

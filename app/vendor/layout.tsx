@@ -7,6 +7,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, ShoppingBag, Package,
   Clock as HistoryIcon, LogOut, ChevronLeft, FlaskConical,
+  UserCircle,
 } from 'lucide-react'
 import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
@@ -130,20 +131,35 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
 
         {/* ── Sidebar footer ── */}
         <div className="border-t border-white/8 p-3 space-y-2 shrink-0">
-          {!collapsed && (
-            <>
-              {/* Pharmacy name */}
-              <div className="px-3 py-2 rounded-xl bg-white/5">
-                <p className="text-[10px] text-white/35 uppercase tracking-widest">Pharmacy</p>
-                <p className="text-white text-xs font-semibold mt-0.5 truncate">
+          {/* Pharmacy name — links to profile page (both expanded + collapsed) */}
+          <Link
+            href="/vendor/profile"
+            onClick={() => setSidebarOpen(false)}
+            title={collapsed ? (vendor?.pharmacy_name ?? 'Profile') : undefined}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group',
+              pathname.startsWith('/vendor/profile')
+                ? 'bg-[#21A053] text-white shadow-[0_2px_8px_rgba(33,160,83,0.35)]'
+                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white',
+            )}
+          >
+            <UserCircle size={18} className="shrink-0" />
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className={cn(
+                  'text-[10px] uppercase tracking-widest',
+                  pathname.startsWith('/vendor/profile') ? 'text-white/70' : 'text-white/35 group-hover:text-white/50',
+                )}>
+                  Pharmacy
+                </p>
+                <p className="text-xs font-semibold truncate">
                   {vendor?.pharmacy_name ?? '—'}
                 </p>
               </div>
+            )}
+          </Link>
 
-              {/* Online/offline compact toggle */}
-              <OnlineToggle variant="compact" />
-            </>
-          )}
+          {!collapsed && <OnlineToggle variant="compact" />}
 
           {/* Logout */}
           <button
