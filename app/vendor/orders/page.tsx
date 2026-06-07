@@ -35,7 +35,7 @@ export default async function OrdersPage() {
       .select('*, order_items(*, catalog_item:catalog_items(*))')
       .eq('vendor_id', vendor.id)
       .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
-      .order('created_at', { ascending: true }),
+      .order('updated_at', { ascending: false }),
 
     /* Closed orders — no items needed for list view */
     supabase

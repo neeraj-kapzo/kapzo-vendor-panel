@@ -36,19 +36,17 @@ const REJECT_REASONS = [
 ] as const
 type RejectReason = typeof REJECT_REASONS[number]
 
-const STATUS_STEPS: OrderStatus[] = ['accepted', 'packing', 'packed', 'dispatched']
+const STATUS_STEPS: OrderStatus[] = ['accepted', 'packed', 'dispatched']
 
 const STATUS_FLOW: Partial<Record<OrderStatus, OrderStatus>> = {
   pending:  'accepted',
-  accepted: 'packing',
-  packing:  'packed',
+  accepted: 'packed',
   packed:   'dispatched',
 }
 
 const ACTION_CONFIG: Partial<Record<OrderStatus, { label: string; bgClass: string; note?: string }>> = {
-  pending:  { label: 'Accept Order',      bgClass: 'bg-[#21A053] hover:bg-[#178040]' },
-  accepted: { label: 'Start Packing',     bgClass: 'bg-[#00326F] hover:bg-[#002a5c]' },
-  packing:  { label: 'Mark as Packed',    bgClass: 'bg-[#21A053] hover:bg-[#178040]' },
+  pending:  { label: 'Accept Order',       bgClass: 'bg-[#21A053] hover:bg-[#178040]' },
+  accepted: { label: 'Mark as Packed',     bgClass: 'bg-[#00326F] hover:bg-[#002a5c]' },
   packed:   { label: 'Confirm Dispatched', bgClass: 'bg-slate-700 hover:bg-slate-800',
                note: 'Enable once rider confirms pickup' },
 }
@@ -337,7 +335,7 @@ interface DetailPanelProps {
 
 function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailPanelProps) {
   const action    = ACTION_CONFIG[order.status]
-  const canReject = ['pending', 'accepted', 'packing'].includes(order.status)
+  const canReject = ['pending', 'accepted'].includes(order.status)
   const showSteps = STATUS_STEPS.includes(order.status as OrderStatus)
   const [rxOpen, setRxOpen] = useState(false)
 
@@ -707,7 +705,7 @@ interface OrdersClientProps {
 export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersClientProps) {
   const [activeOrders, setActiveOrders] = useState<OrderWithItems[]>(
     [...initialActive].sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     )
   )
   const [closedOrders, setClosedOrders] = useState<Order[]>(initialClosed)
@@ -799,7 +797,9 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
             setSelectedOrder((prev) => prev?.id === updated.id ? null : prev)
           } else {
             setActiveOrders((prev) =>
-              prev.map((o) => o.id === updated.id ? { ...o, ...updated } : o)
+              prev
+                .map((o) => o.id === updated.id ? { ...o, ...updated } : o)
+                .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
             )
             setSelectedOrder((prev) =>
               prev?.id === updated.id ? { ...prev, ...updated } : prev
@@ -830,8 +830,13 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     if (!next) return
 
     if (isDemoMode) {
-      setActiveOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: next } : o))
-      setSelectedOrder((prev) => prev?.id === order.id ? { ...prev, status: next } : prev)
+      const now = new Date().toISOString()
+      setActiveOrders((prev) =>
+        prev
+          .map((o) => o.id === order.id ? { ...o, status: next, updated_at: now } : o)
+          .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      )
+      setSelectedOrder((prev) => prev?.id === order.id ? { ...prev, status: next, updated_at: now } : prev)
       if (next === 'accepted')    toast.success('Order accepted!')
       else if (next === 'packed') toast.success('Order packed — notifying riders', { icon: '🛵' })
       else                        toast.success(`Order is now ${next}`)
@@ -855,8 +860,13 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     else if (next === 'packed') toast.success('Order packed — notifying riders', { icon: '🛵' })
     else                        toast.success(`Order is now ${next}`)
 
-    setActiveOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: next } : o))
-    setSelectedOrder((prev) => prev?.id === order.id ? { ...prev, status: next } : prev)
+    const now = new Date().toISOString()
+    setActiveOrders((prev) =>
+      prev
+        .map((o) => o.id === order.id ? { ...o, status: next, updated_at: now } : o)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    )
+    setSelectedOrder((prev) => prev?.id === order.id ? { ...prev, status: next, updated_at: now } : prev)
     setBusyId(null)
   }
 

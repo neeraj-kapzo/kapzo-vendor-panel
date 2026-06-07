@@ -13,7 +13,7 @@ interface VendorStore {
   setActiveOrders: (orders: Order[]) => void
   addPendingOrder: (order: Order) => void
   clearPendingOrder: (orderId: string) => void
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void
+  updateOrderStatus: (orderId: string, status: OrderStatus, updatedAt?: string) => void
 }
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'packing', 'packed', 'dispatched']
@@ -63,11 +63,13 @@ export const useVendorStore = create<VendorStore>((set) => ({
       return { pendingOrders, unreadOrderCount: pendingOrders.length }
     }),
 
-  updateOrderStatus: (orderId, status) =>
+  updateOrderStatus: (orderId, status, updatedAt) =>
     set((state) => {
+      const ts = updatedAt ?? new Date().toISOString()
       const activeOrders = state.activeOrders
-        .map((o) => (o.id === orderId ? { ...o, status } : o))
+        .map((o) => (o.id === orderId ? { ...o, status, updated_at: ts } : o))
         .filter((o) => ACTIVE_STATUSES.includes(o.status))
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       const pendingOrders = state.pendingOrders.filter((o) => o.id !== orderId)
       return {
         activeOrders,

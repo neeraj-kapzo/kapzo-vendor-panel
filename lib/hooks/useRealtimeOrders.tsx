@@ -59,7 +59,7 @@ export function useRealtimeOrders(vendorId: string | undefined) {
       .select('*')
       .eq('vendor_id', vendorId)
       .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .then(({ data }) => {
         if (data) setActiveOrders(data as Order[])
       })
@@ -122,7 +122,7 @@ export function useRealtimeOrders(vendorId: string | undefined) {
         },
         (payload: RealtimePostgresChangesPayload<Order>) => {
           const order = payload.new as Order
-          updateOrderStatus(order.id, order.status)
+          updateOrderStatus(order.id, order.status, order.updated_at)
         }
       )
       .subscribe()

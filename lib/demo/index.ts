@@ -180,7 +180,7 @@ export function getDemoActiveOrders(): DemoOrderWithItems[] {
       new Date(now - 18 * 60_000),
       [{ catId: 'cat-03', qty: 1 }, { catId: 'cat-08', qty: 1 }, { catId: 'cat-10', qty: 3 }],
     ),
-    makeOrder('demo-pack-1', 'packing',
+    makeOrder('demo-pack-1', 'accepted',
       new Date(now - 12 * 60_000),
       [{ catId: 'cat-05', qty: 1 }, { catId: 'cat-09', qty: 1 }],
     ),
@@ -193,7 +193,7 @@ export function getDemoActiveOrders(): DemoOrderWithItems[] {
       [{ catId: 'cat-11', qty: 1 }, { catId: 'cat-12', qty: 1 }],
       { prescription_verified: true }
     ),
-  ]
+  ].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
 }
 
 /* ── Closed orders for the Orders page tabs ─────────────────────── */
@@ -225,7 +225,7 @@ export function getDemoClosedOrders(): Order[] {
       [{ catId: 'cat-06', qty: 1 }],
       { updatedOffset: 5 * 60_000 }
     ),
-  ]
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 }
 
 /* ── Dashboard stats ─────────────────────────────────────────────── */
