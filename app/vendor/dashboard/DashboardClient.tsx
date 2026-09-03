@@ -8,7 +8,8 @@ import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { NewOrderToastContainer } from '@/components/vendor/NewOrderToast'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useOrders } from '@/lib/hooks/useOrders'
-import { createClient } from '@/lib/supabase/client'
+import { fetchDashboardStats, fetchActiveOrders, type NewOrderEvent } from '@/lib/api'
+import { getSocket } from '@/lib/realtime'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
 import Link from 'next/link'
@@ -90,36 +91,13 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
   const refreshStats = useCallback(async () => {
     if (isDemoMode) return
     setStatsLoading(true)
-    const supabase     = createClient()
-    const todayStart   = new Date(); todayStart.setHours(0, 0, 0, 0)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000)
-
-    const [
-      { data: todayRows },
-      { data: pendingRows },
-      { data: weekRows },
-    ] = await Promise.all([
-      supabase.from('orders').select('id, status, total_amount')
-        .eq('vendor_id', vendor.id).gte('created_at', todayStart.toISOString()),
-      supabase.from('orders').select('id, status')
-        .eq('vendor_id', vendor.id)
-        .in('status', ['pending', 'accepted', 'packing']),
-      supabase.from('orders').select('id, status')
-        .eq('vendor_id', vendor.id).gte('created_at', sevenDaysAgo.toISOString()),
-    ])
-
-    const today   = todayRows  ?? []
-    const pending = pendingRows ?? []
-    const week    = weekRows   ?? []
-    const total7    = week.length
-    const accepted7 = week.filter((o) => !['rejected', 'cancelled'].includes(o.status)).length
-
-    setStats({
-      todayCount:     today.length,
-      todayRevenue:   today.filter((o) => o.status === 'delivered').reduce((s, o) => s + o.total_amount, 0),
-      pendingCount:   pending.length,
-      acceptanceRate: total7 > 0 ? Math.round((accepted7 / total7) * 100) : 100,
-    })
+    try {
+      const { activeOrders: _orders, ...next } = await fetchDashboardStats(vendor.id)
+      void _orders
+      setStats(next)
+    } catch {
+      /* transient failure — keep last known stats */
+    }
     setStatsLoading(false)
   }, [vendor.id])
 
@@ -129,11 +107,11 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
     return () => clearInterval(id)
   }, [refreshStats])
 
-  /* ── Incoming order alert subscription (INSERT only) — skip in demo mode ── */
+  /* ── Incoming order alerts (Socket.IO `new-order`) — skip in demo mode ── */
   useEffect(() => {
     if (isDemoMode) return
 
-    const supabase = createClient()
+    const socket = getSocket()
     let titleInterval: ReturnType<typeof setInterval> | null = null
 
     function flashTitle() {
@@ -151,27 +129,20 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
       }, 10_000)
     }
 
-    const channel = supabase
-      .channel('dashboard-new-orders')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders',
-          filter: `vendor_id=eq.${vendor.id}`,
-        },
-        (payload) => {
-          const order = payload.new as Order
-          setAlerts((prev) => [...prev, { id: order.id, order }])
-          playAlertBeep()
-          flashTitle()
-        }
-      )
-      .subscribe()
+    const onNewOrder = async (event: NewOrderEvent) => {
+      // Thin event — pull the full pending row for the toast
+      const orders = await fetchActiveOrders(vendor.id)
+      const order = orders.find((o) => o.id === event.orderId)
+      if (!order) return
+      setAlerts((prev) => [...prev, { id: order.id, order }])
+      playAlertBeep()
+      flashTitle()
+    }
+
+    socket.on('new-order', onNewOrder)
 
     return () => {
-      supabase.removeChannel(channel)
+      socket.off('new-order', onNewOrder)
       if (titleInterval) clearInterval(titleInterval)
     }
   }, [vendor.id])
@@ -216,7 +187,9 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
           <div>
             <h1 className="text-xl font-bold text-[#022135]">
               Good {getGreeting()},{' '}
-              <span className="kapzo-gradient-text">{vendor.contact_person.split(' ')[0]}</span>
+              <span className="kapzo-gradient-text">
+                {(vendor.contact_person || vendor.pharmacy_name).split(' ')[0]}
+              </span>
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
               Here&apos;s what&apos;s happening at <strong className="text-[#022135] font-semibold">{vendor.pharmacy_name}</strong> today.

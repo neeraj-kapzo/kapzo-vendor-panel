@@ -7,7 +7,13 @@ import { Button } from '@/components/ui/Button'
 import { OrderStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
-import { createClient } from '@/lib/supabase/client'
+import {
+  acceptOrder,
+  markOrderDispatched,
+  markOrderPacked,
+  markOrderPacking,
+  rejectOrder as apiRejectOrder,
+} from '@/lib/api'
 import { formatCurrency, timeAgo } from '@/lib/utils'
 import type { Order, OrderItem, CatalogItem, OrderStatus } from '@/types/database.types'
 import toast from 'react-hot-toast'
@@ -46,17 +52,18 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
   async function advanceStatus() {
     if (!nextStatus) return
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: nextStatus, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-
-    if (error) {
-      toast.error('Failed to update order status')
-    } else {
+    try {
+      const transition = {
+        accepted: acceptOrder,
+        packing: markOrderPacking,
+        packed: markOrderPacked,
+        dispatched: markOrderDispatched,
+      }[nextStatus as 'accepted' | 'packing' | 'packed' | 'dispatched']
+      await transition(order.vendor_id, order.id)
       toast.success(`Order marked as ${nextStatus}`)
       onStatusChange?.(order.id, nextStatus)
+    } catch {
+      toast.error('Failed to update order status')
     }
     setLoading(false)
   }
@@ -64,22 +71,13 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
   async function rejectOrder() {
     if (!rejectReason.trim()) return
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        status: 'rejected',
-        rejection_reason: rejectReason.trim(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', order.id)
-
-    if (error) {
-      toast.error('Failed to reject order')
-    } else {
+    try {
+      await apiRejectOrder(order.vendor_id, order.id, rejectReason.trim())
       toast.success('Order rejected')
       onStatusChange?.(order.id, 'rejected')
       setRejectOpen(false)
+    } catch {
+      toast.error('Failed to reject order')
     }
     setLoading(false)
   }

@@ -8,7 +8,18 @@ import {
 import { Modal } from '@/components/ui/Modal'
 import { OrderStatusBadge } from '@/components/ui/Badge'
 import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
-import { createClient } from '@/lib/supabase/client'
+import {
+  acceptOrder,
+  fetchActiveOrders,
+  markOrderDispatched,
+  markOrderPacked,
+  markOrderPacking,
+  mapOrderStatus,
+  rejectOrder as apiRejectOrder,
+  type NewOrderEvent,
+  type OrderStatusEvent,
+} from '@/lib/api'
+import { getSocket } from '@/lib/realtime'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
 import { cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
@@ -64,6 +75,8 @@ const STATUS_DOT: Record<OrderStatus, string> = {
 
 /* ─── Helpers ─── */
 function deadlineMs(order: Order) {
+  // Server-anchored deadline when available (NFR: countdown synced server-side)
+  if (order.expires_at) return new Date(order.expires_at).getTime()
   return new Date(order.created_at).getTime() + TIMEOUT_SECS * 1_000
 }
 
@@ -335,7 +348,8 @@ interface DetailPanelProps {
 
 function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailPanelProps) {
   const action    = ACTION_CONFIG[order.status]
-  const canReject = ['pending', 'accepted'].includes(order.status)
+  // Backend only allows rejection from PENDING (an accepted order must be fulfilled)
+  const canReject = order.status === 'pending'
   const showSteps = STATUS_STEPS.includes(order.status as OrderStatus)
   const [rxOpen, setRxOpen] = useState(false)
 
@@ -748,68 +762,67 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
   const currentPending = pendingQueue[0]
   const queueCount     = pendingQueue.length - 1
 
-  /* ── Fetch full order with items (for realtime INSERTs + detail view) ── */
+  /* ── Fetch full order with items (for realtime events + detail view) ── */
   async function fetchOrderWithItems(orderId: string): Promise<OrderWithItems | null> {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('orders')
-      .select('*, order_items(*, catalog_item:catalog_items(*))')
-      .eq('id', orderId)
-      .single()
-    return data as OrderWithItems | null
+    const orders = await fetchActiveOrders(vendorId)
+    return orders.find((o) => o.id === orderId) ?? null
   }
 
-  /* ── Realtime subscription — skipped in demo mode ── */
+  /* ── Realtime (Socket.IO vendor room) — skipped in demo mode ── */
   useEffect(() => {
     if (isDemoMode) return
 
-    const supabase = createClient()
+    const socket = getSocket()
 
-    const channel = supabase
-      .channel('orders-client-v2')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendorId}` },
-        async (payload) => {
-          const full = await fetchOrderWithItems((payload.new as Order).id)
-          if (!full) return
-          setActiveOrders((prev) => {
-            if (prev.some((o) => o.id === full.id)) return prev
-            return [...prev, full]
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendorId}` },
-        (payload) => {
-          const updated = payload.new as Order
-          const closed  = ['delivered', 'rejected', 'cancelled'].includes(updated.status)
+    const onNewOrder = async (event: NewOrderEvent) => {
+      const full = await fetchOrderWithItems(event.orderId)
+      if (!full) return
+      setActiveOrders((prev) => {
+        if (prev.some((o) => o.id === full.id)) return prev
+        return [...prev, full]
+      })
+    }
 
-          if (closed) {
-            setActiveOrders((prev) => prev.filter((o) => o.id !== updated.id))
-            setClosedOrders((prev) => {
-              if (prev.some((o) => o.id === updated.id)) {
-                return prev.map((o) => o.id === updated.id ? { ...o, ...updated } : o)
+    const onOrderStatus = (event: OrderStatusEvent) => {
+      const status = mapOrderStatus(event.status)
+      const closed = ['delivered', 'rejected', 'cancelled'].includes(status)
+      const now = new Date().toISOString()
+
+      if (closed) {
+        setActiveOrders((prev) => {
+          const found = prev.find((o) => o.id === event.orderId)
+          if (found) {
+            setClosedOrders((closedPrev) => {
+              if (closedPrev.some((o) => o.id === event.orderId)) {
+                return closedPrev.map((o) =>
+                  o.id === event.orderId ? { ...o, status, updated_at: now } : o
+                )
               }
-              return [updated, ...prev]
+              return [{ ...found, status, updated_at: now }, ...closedPrev]
             })
-            setSelectedOrder((prev) => prev?.id === updated.id ? null : prev)
-          } else {
-            setActiveOrders((prev) =>
-              prev
-                .map((o) => o.id === updated.id ? { ...o, ...updated } : o)
-                .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-            )
-            setSelectedOrder((prev) =>
-              prev?.id === updated.id ? { ...prev, ...updated } : prev
-            )
           }
-        }
-      )
-      .subscribe()
+          return prev.filter((o) => o.id !== event.orderId)
+        })
+        setSelectedOrder((prev) => prev?.id === event.orderId ? null : prev)
+      } else {
+        setActiveOrders((prev) =>
+          prev
+            .map((o) => o.id === event.orderId ? { ...o, status, updated_at: now } : o)
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        )
+        setSelectedOrder((prev) =>
+          prev?.id === event.orderId ? { ...prev, status, updated_at: now } : prev
+        )
+      }
+    }
 
-    return () => { supabase.removeChannel(channel) }
+    socket.on('new-order', onNewOrder)
+    socket.on('order-status', onOrderStatus)
+
+    return () => {
+      socket.off('new-order', onNewOrder)
+      socket.off('order-status', onOrderStatus)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId])
 
@@ -844,14 +857,19 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     }
 
     setBusyId(order.id)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: next, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-
-    if (error) {
-      toast.error('Failed to update order')
+    try {
+      if (next === 'accepted') {
+        await acceptOrder(vendorId, order.id)
+      } else if (next === 'packed') {
+        // Backend state machine is ACCEPTED → PACKING → PACKED; the panel's
+        // single "Mark as Packed" action walks both steps.
+        await markOrderPacking(vendorId, order.id)
+        await markOrderPacked(vendorId, order.id)
+      } else if (next === 'dispatched') {
+        await markOrderDispatched(vendorId, order.id)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update order')
       setBusyId(null)
       return
     }
@@ -889,15 +907,10 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     }
 
     setBusyId(orderId)
-    const supabase = createClient()
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'rejected', rejection_reason: reason, updated_at: new Date().toISOString() })
-      .eq('id', orderId)
-
-    if (error) {
-      toast.error('Failed to reject order')
+    try {
+      await apiRejectOrder(vendorId, orderId, reason)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reject order')
       setBusyId(null)
       return
     }

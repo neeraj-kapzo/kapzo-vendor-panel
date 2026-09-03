@@ -1,24 +1,27 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { isDemoMode, DEMO_VENDOR } from '@/lib/demo'
-import { ProfileClient } from './ProfileClient'
+'use client'
 
-export default async function ProfilePage() {
+import { ProfileClient } from './ProfileClient'
+import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { isDemoMode, DEMO_VENDOR } from '@/lib/demo'
+
+export default function ProfilePage() {
+  const { vendor, loading } = useRequireVendor()
+
   if (isDemoMode) {
     return <ProfileClient vendor={DEMO_VENDOR} />
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/vendor/login')
-
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!vendor) redirect('/vendor/login')
+  if (loading || !vendor) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Skeleton className="h-10 w-64 rounded-xl" />
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-48 w-full rounded-2xl" />
+        ))}
+      </div>
+    )
+  }
 
   return <ProfileClient vendor={vendor} />
 }

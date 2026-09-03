@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { fetchVendorMe } from '@/lib/api'
+import { waitForUser } from '@/lib/firebase'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { isDemoMode, DEMO_VENDOR } from '@/lib/demo'
-import type { Vendor } from '@/types/database.types'
 
 export function useVendor() {
   const { vendor, setVendor } = useVendorStore()
@@ -12,7 +12,7 @@ export function useVendor() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Demo mode — seed store immediately, no Supabase needed
+    // Demo mode — seed store immediately, no backend needed
     if (isDemoMode) {
       if (!vendor) setVendor(DEMO_VENDOR)
       setLoading(false)
@@ -21,30 +21,21 @@ export function useVendor() {
 
     if (vendor) return
 
-    async function fetchVendor() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-
+    async function load() {
+      const user = await waitForUser()
       if (!user) {
         setLoading(false)
         return
       }
-
-      const { data, error: err } = await supabase
-        .from('vendors')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      if (err) {
-        setError(err.message)
-      } else {
-        setVendor(data as Vendor)
+      try {
+        setVendor(await fetchVendorMe())
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load vendor')
       }
       setLoading(false)
     }
 
-    fetchVendor()
+    void load()
   }, [vendor, setVendor])
 
   return { vendor, loading, error }

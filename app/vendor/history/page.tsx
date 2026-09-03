@@ -1,25 +1,30 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
 import { HistoryClient } from './HistoryClient'
+import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { isDemoMode, DEMO_VENDOR_ID } from '@/lib/demo'
 
-export default async function HistoryPage() {
+export default function HistoryPage() {
+  const { vendor, loading } = useRequireVendor()
+
   /* ── Demo mode ── */
   if (isDemoMode) {
     return <HistoryClient vendorId={DEMO_VENDOR_ID} />
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/vendor/login')
-
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!vendor) redirect('/vendor/dashboard')
+  if (loading || !vendor) {
+    return (
+      <div className="space-y-5 max-w-5xl mx-auto">
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+        </div>
+        <Skeleton className="h-96 w-full rounded-2xl" />
+      </div>
+    )
+  }
 
   /* All data fetching is client-driven (date filters + pagination) */
   return <HistoryClient vendorId={vendor.id} />

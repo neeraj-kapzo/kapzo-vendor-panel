@@ -1,18 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import {
   Building2, Phone, Mail, MapPin, Clock, CreditCard,
   FileText, ShieldCheck, Edit2, Save, X, Upload, Loader2,
   Eye, EyeOff, CheckCircle2, AlertCircle, User,
 } from 'lucide-react'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/client'
+import { uploadFile } from '@/lib/api'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { LoginMethodsCard } from '@/components/auth/LoginMethodsCard'
 import type { Vendor } from '@/types/database.types'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -223,22 +224,9 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
   // Account number visibility
   const [showAccount, setShowAccount] = useState(false)
 
-  // Load signed preview URLs on mount / when paths change
-  useEffect(() => {
-    if (isDemoMode) return
-    async function loadPreviews() {
-      const supabase = createClient()
-      if (licensePath) {
-        const { data } = await supabase.storage.from('vendor-licenses').createSignedUrl(licensePath, 3600)
-        setLicensePreview(data?.signedUrl ?? null)
-      }
-      if (fssaiPath) {
-        const { data } = await supabase.storage.from('vendor-licenses').createSignedUrl(fssaiPath, 3600)
-        setFssaiPreview(data?.signedUrl ?? null)
-      }
-    }
-    loadPreviews()
-  }, [licensePath, fssaiPath])
+  // Document previews: the backend serves uploads from a private GCS bucket
+  // and doesn't expose signed read URLs yet, so previews only exist for
+  // freshly-selected files (object URLs set by uploadDoc) and in demo mode.
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -274,24 +262,15 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
       return
     }
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) throw new Error('Not authenticated')
-
-    const ext  = file.name.split('.').pop() ?? 'jpg'
-    const path = `${user.id}/${type}-${Date.now()}.${ext}`
-
-    const { error } = await supabase.storage.from('vendor-licenses').upload(path, file, { upsert: true })
-    if (error) throw error
-
-    const { data: urlData } = await supabase.storage.from('vendor-licenses').createSignedUrl(path, 3600)
+    const key = await uploadFile('license', file)
+    const localPreview = URL.createObjectURL(file)
 
     if (type === 'license') {
-      setLicensePath(path)
-      setLicensePreview(urlData?.signedUrl ?? null)
+      setLicensePath(key)
+      setLicensePreview(localPreview)
     } else {
-      setFssaiPath(path)
-      setFssaiPreview(urlData?.signedUrl ?? null)
+      setFssaiPath(key)
+      setFssaiPreview(localPreview)
     }
   }
 
@@ -319,9 +298,12 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
       }
 
       if (!isDemoMode) {
-        const supabase = createClient()
-        const { error } = await supabase.from('vendors').update(updates).eq('id', vendor.id)
-        if (error) throw error
+        // Phase 1: the backend has no vendor self-update endpoint — profile
+        // changes must go through Kapzo support (admin panel owns vendor
+        // records). Surface that instead of pretending to save.
+        throw new Error(
+          'Profile updates are handled by Kapzo support in this release — please contact support to change your registered details.',
+        )
       }
 
       const updated = { ...vendor, ...updates }
@@ -361,10 +343,14 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
                 <Save size={15} /> Save Changes
               </Button>
             </>
-          ) : (
+          ) : isDemoMode ? (
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Edit2 size={15} /> Edit Profile
             </Button>
+          ) : (
+            <span className="text-xs text-slate-400 max-w-[220px] text-right">
+              To change registered details, contact Kapzo support
+            </span>
           )}
         </div>
       </div>
@@ -619,6 +605,9 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
           />
         </div>
       </SectionCard>
+
+      {/* ── Login methods (Firebase provider linking) ── */}
+      <LoginMethodsCard />
 
     </div>
   )

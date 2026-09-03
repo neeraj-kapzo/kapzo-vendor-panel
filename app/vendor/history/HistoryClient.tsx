@@ -7,7 +7,13 @@ import {
   Clock, Package, FileText, AlertTriangle, History,
   IndianRupee, ShoppingBag, TrendingUp, Loader2,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import {
+  fetchOrderHistory,
+  fetchVendorStats,
+  mapOrderStatus,
+  type BackendOrderHistoryRow,
+  type StatsRange,
+} from '@/lib/api'
 import { isDemoMode, getDemoHistoryOrders } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -86,6 +92,31 @@ function itemsPreview(items: HistoryOrderItem[]): string {
 
 function fmtDate(iso: string) {
   return format(new Date(iso), 'd MMM, h:mm a')
+}
+
+/**
+ * Backend range for a UI preset. The backend supports today / 7-day / 30-day
+ * windows; "This Month" and custom ranges are served from the 30-day window
+ * (custom rows are then filtered client-side, so dates older than 30 days
+ * won't appear — a known phase-1 limitation).
+ */
+function backendRange(preset: DatePreset): StatsRange {
+  if (preset === 'today') return 'today'
+  if (preset === 'week') return 'week'
+  return 'month'
+}
+
+function mapHistoryRow(row: BackendOrderHistoryRow): HistoryOrder {
+  return {
+    id: row.id,
+    status: mapOrderStatus(row.status),
+    total_amount: row.total,
+    created_at: row.createdAt,
+    updated_at: row.createdAt,
+    rejection_reason: null,
+    prescription_verified: false,
+    order_items: [],
+  }
 }
 
 function getPageNums(current: number, total: number): (number | '…')[] {
@@ -431,48 +462,36 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
       return
     }
 
-    const offset   = (page - 1) * PAGE_SIZE
-    const supabase = createClient()
+    try {
+      const range = backendRange(preset)
+      const [historyPage, stats] = await Promise.all([
+        fetchOrderHistory(range, page),
+        fetchVendorStats(range),
+      ])
 
-    const [tableRes, summaryRes, countRes] = await Promise.all([
-      /* Paginated table rows with items */
-      supabase
-        .from('orders')
-        .select('id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified, order_items(quantity, unit_price, catalog_item:catalog_items(name))')
-        .eq('vendor_id', vendorId)
-        .in('status', ['delivered', 'rejected', 'cancelled'])
-        .gte('updated_at', from)
-        .lte('updated_at', to)
-        .order('updated_at', { ascending: false })
-        .range(offset, offset + PAGE_SIZE - 1),
+      let rows = historyPage.items.map(mapHistoryRow)
+      let count = historyPage.total
+      let deliveredSummary: Summary = { orders: stats.deliveredCount, revenue: stats.grossSales }
 
-      /* Summary: all delivered orders in range (amounts only) */
-      supabase
-        .from('orders')
-        .select('total_amount')
-        .eq('vendor_id', vendorId)
-        .eq('status', 'delivered')
-        .gte('updated_at', from)
-        .lte('updated_at', to),
+      if (preset === 'custom') {
+        // Client-side narrowing of the 30-day window (see backendRange doc)
+        rows = rows.filter((o) => o.created_at >= from && o.created_at <= to)
+        count = rows.length
+        const delivered = rows.filter((o) => o.status === 'delivered')
+        deliveredSummary = {
+          orders: delivered.length,
+          revenue: delivered.reduce((s, o) => s + o.total_amount, 0),
+        }
+      }
 
-      /* Total count for pagination */
-      supabase
-        .from('orders')
-        .select('id', { count: 'exact', head: true })
-        .eq('vendor_id', vendorId)
-        .in('status', ['delivered', 'rejected', 'cancelled'])
-        .gte('updated_at', from)
-        .lte('updated_at', to),
-    ])
-
-    setOrders((tableRes.data ?? []) as unknown as HistoryOrder[])
-    setTotal(countRes.count ?? 0)
-
-    const delivered = summaryRes.data ?? []
-    setSummary({
-      orders:  delivered.length,
-      revenue: delivered.reduce((s, o) => s + o.total_amount, 0),
-    })
+      setOrders(rows)
+      setTotal(count)
+      setSummary(deliveredSummary)
+    } catch {
+      setOrders([])
+      setTotal(0)
+      setSummary({ orders: 0, revenue: 0 })
+    }
     setLoading(false)
   }, [preset, customFrom, customTo, page, vendorId])
 
@@ -523,46 +542,50 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
       return
     }
 
-    const supabase = createClient()
+    try {
+      // Pull every page of the range from the backend
+      const range = backendRange(preset)
+      const collected: HistoryOrder[] = []
+      for (let p = 1; p <= 100; p++) {
+        const result = await fetchOrderHistory(range, p)
+        collected.push(...result.items.map(mapHistoryRow))
+        if (p * PAGE_SIZE >= result.total) break
+      }
 
-    const { data } = await supabase
-      .from('orders')
-      .select('id, status, total_amount, updated_at, rejection_reason, order_items(quantity, catalog_item:catalog_items(name))')
-      .eq('vendor_id', vendorId)
-      .in('status', ['delivered', 'rejected', 'cancelled'])
-      .gte('updated_at', from)
-      .lte('updated_at', to)
-      .order('updated_at', { ascending: false })
+      const data = preset === 'custom'
+        ? collected.filter((o) => o.created_at >= from && o.created_at <= to)
+        : collected
 
-    if (data && data.length > 0) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const rows = (data as any[]).map((o) => [
-        o.id,
-        format(new Date(o.updated_at), 'd MMM yyyy, h:mm a'),
-        (o.order_items as any[]).map((i: any) => `${i.catalog_item.name} x${i.quantity}`).join('; '),
-        o.total_amount.toFixed(2),
-        o.status,
-        o.rejection_reason ?? '',
-      ])
-      /* eslint-enable @typescript-eslint/no-explicit-any */
+      if (data.length > 0) {
+        const rows = data.map((o) => [
+          o.id,
+          format(new Date(o.updated_at), 'd MMM yyyy, h:mm a'),
+          '\u2014', // item lines aren't part of the history endpoint
+          o.total_amount.toFixed(2),
+          o.status,
+          o.rejection_reason ?? '',
+        ])
 
-      const header = ['Order ID', 'Date', 'Items', 'Total (INR)', 'Status', 'Rejection Reason']
-      const csv    = [header, ...rows]
-        .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-        .join('\n')
+        const header = ['Order ID', 'Date', 'Items', 'Total (INR)', 'Status', 'Rejection Reason']
+        const csv    = [header, ...rows]
+          .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+          .join('\n')
 
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `kapzo-history-${todayStr()}.csv`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      toast.success(`Exported ${data.length} orders`)
-    } else {
-      toast.error('No orders to export')
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+        const url  = URL.createObjectURL(blob)
+        const a    = document.createElement('a')
+        a.href     = url
+        a.download = `kapzo-history-${todayStr()}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast.success(`Exported ${data.length} orders`)
+      } else {
+        toast.error('No orders to export')
+      }
+    } catch {
+      toast.error('Export failed \u2014 please retry')
     }
     setExporting(false)
   }

@@ -66,7 +66,7 @@ This applies all migrations in `supabase/migrations/` to your remote Supabase pr
 pnpm dev
 ```
 
-App runs at `http://localhost:3000`. It auto-redirects to `/vendor/login`.
+App runs at `http://localhost:3001`. It auto-redirects to `/vendor/login`.
 
 ---
 
@@ -86,6 +86,12 @@ App runs at `http://localhost:3000`. It auto-redirects to `/vendor/login`.
 | `npx supabase link --project-ref <ref>` | Link CLI to a Supabase project |
 
 ---
+
+## Production deploy
+
+Production is https://vendor.kapzo.in, a static export (`pnpm build` → `out/`)
+in `gs://kapzo-vendor-panel-prod` behind the shared Kapzo load balancer. See
+**`docs/DEPLOYMENT.md`** for the release steps and one-time setup.
 
 ## Project Structure
 

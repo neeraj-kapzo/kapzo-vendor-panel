@@ -6,7 +6,7 @@ import {
   Save, Package, X, Loader2, AlertCircle, Check,
 } from 'lucide-react'
 import { Toggle } from '@/components/ui/Toggle'
-import { createClient } from '@/lib/supabase/client'
+import { upsertInventory } from '@/lib/api'
 import { isDemoMode } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -206,42 +206,21 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
     /* Optimistic flip */
     updateItem(catalogId, { is_available: next })
 
-    // Demo mode — no Supabase, local state is sufficient
+    // Demo mode — no backend, local state is sufficient
     if (isDemoMode) return
 
-    const supabase = createClient()
-    let error: { message: string } | null = null
-
-    if (item.inv_id) {
-      const res = await supabase
-        .from('vendor_inventory')
-        .update({ is_available: next })
-        .eq('id', item.inv_id)
-      error = res.error
-    } else {
-      const res = await supabase
-        .from('vendor_inventory')
-        .insert({
-          vendor_id:       vendorId,
-          catalog_item_id: catalogId,
-          vendor_price:    item.vendor_price,
-          stock_qty:       item.stock_qty,
-          is_available:    next,
-        })
-        .select('id')
-        .single()
-      error = res.error
-      if (!error && res.data) {
-        updateItem(catalogId, { inv_id: res.data.id })
-      }
-    }
-
-    if (error) {
+    try {
+      const row = await upsertInventory(catalogId, {
+        isAvailable: next,
+        price: parseFloat(item.priceStr) || item.vendor_price || item.mrp,
+      })
+      if (!item.inv_id) updateItem(catalogId, { inv_id: row.id })
+    } catch (err) {
       /* Revert */
       updateItem(catalogId, { is_available: !next })
-      toast.error('Failed to update availability')
+      toast.error(err instanceof Error ? err.message : 'Failed to update availability')
     }
-  }, [items, vendorId, updateItem])
+  }, [items, updateItem])
 
   /* ── Bulk availability mark ── */
   const bulkMark = useCallback(async (available: boolean) => {
@@ -263,53 +242,43 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
     }
 
     setBulkBusy(true)
-    const supabase = createClient()
 
-    const toUpdate = targets.filter((i) => i.inv_id)
-    const toInsert = targets.filter((i) => !i.inv_id)
+    // One upsert per item (the backend keys inventory on catalogItemId)
+    const results = await Promise.all(
+      targets.map(async (i) => {
+        try {
+          const row = await upsertInventory(i.catalog_id, {
+            isAvailable: available,
+            price: parseFloat(i.priceStr) || i.vendor_price || i.mrp,
+          })
+          return { catalogId: i.catalog_id, invId: row.id, ok: true as const }
+        } catch {
+          return { catalogId: i.catalog_id, invId: null, ok: false as const }
+        }
+      })
+    )
 
-    const results = await Promise.all([
-      toUpdate.length
-        ? supabase.from('vendor_inventory')
-            .update({ is_available: available })
-            .in('id', toUpdate.map((i) => i.inv_id!))
-        : Promise.resolve({ error: null }),
-      toInsert.length
-        ? supabase.from('vendor_inventory')
-            .insert(toInsert.map((i) => ({
-              vendor_id:       vendorId,
-              catalog_item_id: i.catalog_id,
-              vendor_price:    i.vendor_price,
-              stock_qty:       i.stock_qty,
-              is_available:    available,
-            })))
-            .select('id, catalog_item_id')
-        : Promise.resolve({ error: null, data: [] as { id: string; catalog_item_id: string }[] }),
-    ])
-
-    const hasError = results.some((r) => r.error)
-    if (hasError) {
+    const failed = results.filter((r) => !r.ok)
+    if (failed.length) {
       toast.error('Failed to update some items')
-      /* Revert */
+      /* Revert the failed ones */
+      const failedIds = new Set(failed.map((r) => r.catalogId))
       setItems((prev) =>
-        prev.map((i) => ids.includes(i.catalog_id) ? { ...i, is_available: !available } : i)
+        prev.map((i) => failedIds.has(i.catalog_id) ? { ...i, is_available: !available } : i)
       )
     } else {
-      /* Update inv_ids for newly inserted */
-      const inserted = (results[1] as { data: { id: string; catalog_item_id: string }[] | null }).data ?? []
-      if (inserted.length) {
-        setItems((prev) =>
-          prev.map((i) => {
-            const ins = inserted.find((d) => d.catalog_item_id === i.catalog_id)
-            return ins ? { ...i, inv_id: ins.id } : i
-          })
-        )
-      }
       toast.success(`${ids.length} item${ids.length > 1 ? 's' : ''} marked ${available ? 'available' : 'unavailable'}`)
       setSelectedIds(new Set())
     }
+    /* Record inv_ids for rows that now exist */
+    setItems((prev) =>
+      prev.map((i) => {
+        const saved = results.find((r) => r.ok && r.catalogId === i.catalog_id)
+        return saved?.invId && !i.inv_id ? { ...i, inv_id: saved.invId } : i
+      })
+    )
     setBulkBusy(false)
-  }, [selectedIds, items, vendorId])
+  }, [selectedIds, items])
 
   /* ── Save price + stock changes ── */
   const saveChanges = useCallback(async () => {
@@ -324,60 +293,42 @@ export function InventoryClient({ vendorId, initialItems }: InventoryClientProps
 
     setSaving(true)
 
-    const toUpdate = dirtyItems.filter((i) => i.inv_id)
-    const toInsert = dirtyItems.filter((i) => !i.inv_id)
+    const results = await Promise.all(
+      dirtyItems.map(async (i) => {
+        try {
+          const row = await upsertInventory(i.catalog_id, {
+            isAvailable: i.is_available,
+            price: parseFloat(i.priceStr) || 0,
+          })
+          return { catalogId: i.catalog_id, invId: row.id, ok: true as const }
+        } catch {
+          return { catalogId: i.catalog_id, invId: null, ok: false as const }
+        }
+      })
+    )
 
-    const supabase = createClient()
-    const [upd, ins] = await Promise.all([
-      toUpdate.length
-        ? supabase.from('vendor_inventory')
-            .upsert(toUpdate.map((i) => ({
-              id:           i.inv_id!,
-              vendor_id:    vendorId,
-              catalog_item_id: i.catalog_id,
-              vendor_price: parseFloat(i.priceStr) || 0,
-              stock_qty:    parseInt(i.stockStr, 10)   || 0,
-              is_available: i.is_available,
-            })))
-            .select('id, catalog_item_id')
-        : Promise.resolve({ error: null, data: [] }),
-      toInsert.length
-        ? supabase.from('vendor_inventory')
-            .insert(toInsert.map((i) => ({
-              vendor_id:    vendorId,
-              catalog_item_id: i.catalog_id,
-              vendor_price: parseFloat(i.priceStr) || 0,
-              stock_qty:    parseInt(i.stockStr, 10)   || 0,
-              is_available: i.is_available,
-            })))
-            .select('id, catalog_item_id')
-        : Promise.resolve({ error: null, data: [] }),
-    ])
-
-    if (upd.error || ins.error) {
+    const failedIds = new Set(results.filter((r) => !r.ok).map((r) => r.catalogId))
+    if (failedIds.size) {
       toast.error('Failed to save some items')
-    } else {
-      const allSaved = [
-        ...((upd.data as { id: string; catalog_item_id: string }[] | null) ?? []),
-        ...((ins.data as { id: string; catalog_item_id: string }[] | null) ?? []),
-      ]
-      setItems((prev) =>
-        prev.map((i) => {
-          if (!i.isDirty) return i
-          const saved = allSaved.find((d) => d.catalog_item_id === i.catalog_id)
-          return {
-            ...i,
-            isDirty:      false,
-            inv_id:       saved?.id ?? i.inv_id,
-            vendor_price: parseFloat(i.priceStr) || 0,
-            stock_qty:    parseInt(i.stockStr, 10)   || 0,
-          }
-        })
-      )
+    }
+    setItems((prev) =>
+      prev.map((i) => {
+        if (!i.isDirty || failedIds.has(i.catalog_id)) return i
+        const saved = results.find((r) => r.ok && r.catalogId === i.catalog_id)
+        return {
+          ...i,
+          isDirty:      false,
+          inv_id:       saved?.invId ?? i.inv_id,
+          vendor_price: parseFloat(i.priceStr) || 0,
+          stock_qty:    parseInt(i.stockStr, 10)   || 0,
+        }
+      })
+    )
+    if (!failedIds.size) {
       toast.success(`${dirtyItems.length} item${dirtyItems.length > 1 ? 's' : ''} saved`)
     }
     setSaving(false)
-  }, [dirtyItems, hasErrors, vendorId])
+  }, [dirtyItems, hasErrors])
 
   /* ── Selection helpers ── */
   const toggleSelect = (catalogId: string, on: boolean) => {

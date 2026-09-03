@@ -1,15 +1,43 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
 import { SettlementsClient } from './SettlementsClient'
+import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
+import { fetchVendorStats } from '@/lib/api'
+import { Skeleton } from '@/components/ui/Skeleton'
 import {
   isDemoMode, DEMO_VENDOR_ID, DEMO_SETTLEMENTS,
   getDemoSettlementStats,
 } from '@/lib/demo'
 
-export default async function SettlementsPage() {
+export default function SettlementsPage() {
+  const { vendor, loading: vendorLoading } = useRequireVendor()
+  const [pendingAmount, setPendingAmount] = useState<number | null>(null)
+
+  // Stable demo stats — recomputing every render would re-seed client state
+  const demoStats = useMemo(() => (isDemoMode ? getDemoSettlementStats() : null), [])
+
+  useEffect(() => {
+    if (isDemoMode || !vendor) return
+    let cancelled = false
+    // Phase 1: payouts are settled offline, so there is no settlement ledger
+    // yet — the pending balance is the last 30 days' earnings from the
+    // backend stats endpoint (gross sales minus Kapzo commission).
+    fetchVendorStats('month')
+      .then((stats) => {
+        if (!cancelled) setPendingAmount(stats.earnings)
+      })
+      .catch(() => {
+        if (!cancelled) setPendingAmount(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [vendor])
+
   /* ── Demo mode ── */
-  if (isDemoMode) {
-    const stats = getDemoSettlementStats()
+  if (isDemoMode && demoStats) {
+    const stats = demoStats
     return (
       <SettlementsClient
         vendorId={DEMO_VENDOR_ID}
@@ -23,53 +51,29 @@ export default async function SettlementsPage() {
     )
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/vendor/login')
-
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!vendor) redirect('/vendor/dashboard')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [{ data: settlements }, { data: pendingOrders }] = await Promise.all([
-    (supabase as any)
-      .from('settlements')
-      .select('*')
-      .eq('vendor_id', vendor.id)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('vendor_id', vendor.id)
-      .eq('status', 'delivered'),
-  ])
-
-  const rows       = (settlements ?? []) as any[]
-  const completed  = rows.filter((s: any) => s.status === 'completed')
-  const failed     = rows.filter((s: any) => s.status === 'failed')
-
-  const totalSettled   = completed.reduce((sum: number, s: any) => sum + Number(s.amount), 0)
-  const completedCount = completed.length
-  const failedCount    = failed.length
-
-  const grossRevenue  = (pendingOrders ?? []).reduce((sum, o) => sum + Number(o.total_amount), 0)
-  const pendingAmount = Math.max(0, grossRevenue - totalSettled)
-  const lastStatus    = rows[0]?.status ?? 'pending'
+  if (vendorLoading || !vendor || pendingAmount === null) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-56 rounded-xl" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-72 w-full rounded-2xl" />
+      </div>
+    )
+  }
 
   return (
     <SettlementsClient
       vendorId={vendor.id}
-      initialSettlements={rows}
-      totalSettled={totalSettled}
+      initialSettlements={[]}
+      totalSettled={0}
       pendingAmount={pendingAmount}
-      completedCount={completedCount}
-      failedCount={failedCount}
-      lastStatus={lastStatus}
+      completedCount={0}
+      failedCount={0}
+      lastStatus="pending"
     />
   )
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Pencil, Check, X } from 'lucide-react'
 import { Toggle } from '@/components/ui/Toggle'
-import { createClient } from '@/lib/supabase/client'
+import { upsertInventory } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 import type { InventoryWithCatalog } from '@/types/database.types'
 import toast from 'react-hot-toast'
@@ -28,35 +28,29 @@ export function InventoryRow({ item, onUpdate }: InventoryRowProps) {
       return
     }
     setSaving(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('vendor_inventory')
-      .update({ stock_qty: qty, vendor_price: price })
-      .eq('id', item.id)
-
-    if (error) {
-      toast.error('Failed to update inventory')
-    } else {
+    try {
+      // Stock quantity is availability-only on the backend; price is what persists.
+      await upsertInventory(item.catalog_item_id, { isAvailable, price })
       toast.success('Inventory updated')
       onUpdate?.(item.id, { stock_qty: qty, vendor_price: price })
       setEditing(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update inventory')
     }
     setSaving(false)
   }
 
   async function toggleAvailability(available: boolean) {
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('vendor_inventory')
-      .update({ is_available: available })
-      .eq('id', item.id)
-
-    if (error) {
-      toast.error('Failed to update availability')
-      setIsAvailable(!available)
-    } else {
+    try {
+      await upsertInventory(item.catalog_item_id, {
+        isAvailable: available,
+        price: Number(vendorPrice) || item.vendor_price,
+      })
       setIsAvailable(available)
       onUpdate?.(item.id, { is_available: available })
+    } catch {
+      toast.error('Failed to update availability')
+      setIsAvailable(!available)
     }
   }
 

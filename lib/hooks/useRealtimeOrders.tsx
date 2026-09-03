@@ -2,10 +2,11 @@
 
 import React, { useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { createClient } from '@/lib/supabase/client'
+import { fetchActiveOrders, mapOrderStatus } from '@/lib/api'
+import type { NewOrderEvent, OrderStatusEvent } from '@/lib/api'
+import { getSocket } from '@/lib/realtime'
 import { useVendorStore } from '@/lib/store/vendorStore'
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import type { Order } from '@/types/database.types'
+import { isDemoMode } from '@/lib/demo'
 
 /* ─── Audio alert (Web Audio API — no files needed) ─── */
 function playAlertBeep() {
@@ -46,89 +47,66 @@ function flashTitle(intervalRef: React.MutableRefObject<ReturnType<typeof setInt
   }, 8000)
 }
 
+/**
+ * Live vendor order feed over the backend's Socket.IO gateway. The server
+ * auto-joins this connection to `vendor:{vendorId}` after verifying the
+ * Firebase token, so no explicit subscribe call is needed:
+ *  - `new-order`    → alert UX (beep, tab flash, toast) + fetch the full row
+ *  - `order-status` → silent store sync (covers auto-reject, rider updates…)
+ */
 export function useRealtimeOrders(vendorId: string | undefined) {
   const { addPendingOrder, updateOrderStatus, setActiveOrders } = useVendorStore()
   const flashIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   /* ── Initial fetch ── */
   useEffect(() => {
-    if (!vendorId) return
-    const supabase = createClient()
-    supabase
-      .from('orders')
-      .select('*')
-      .eq('vendor_id', vendorId)
-      .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
-      .order('updated_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setActiveOrders(data as Order[])
-      })
+    if (!vendorId || isDemoMode) return
+    fetchActiveOrders(vendorId)
+      .then(setActiveOrders)
+      .catch(() => {})
   }, [vendorId, setActiveOrders])
 
   /* ── Realtime subscription ── */
   useEffect(() => {
-    if (!vendorId) return
-    const supabase = createClient()
+    if (!vendorId || isDemoMode) return
+    const socket = getSocket()
 
-    const channel = supabase
-      .channel(`realtime-orders-${vendorId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders',
-          filter: `vendor_id=eq.${vendorId}`,
-        },
-        async (payload: RealtimePostgresChangesPayload<Order>) => {
-          const order = payload.new as Order
+    const onNewOrder = async (event: NewOrderEvent) => {
+      // The event is a thin ping — fetch the full pending row for the store.
+      const orders = await fetchActiveOrders(vendorId)
+      const order = orders.find((o) => o.id === event.orderId)
+      if (!order || order.status !== 'pending') return
 
-          // Fetch full record to confirm it's still pending
-          const { data } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', order.id)
-            .single()
-
-          if (!data || data.status !== 'pending') return
-
-          addPendingOrder(data as Order)
-          playAlertBeep()
-          flashTitle(flashIntervalRef)
-          toast.custom(
-            (t) => (
-              <div
-                className={`flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg transition-all
-                  bg-white border border-green-200 ${t.visible ? 'opacity-100' : 'opacity-0'}`}
-              >
-                <span className="text-xl">🛒</span>
-                <div>
-                  <p className="font-semibold text-[#022135] text-sm">New Order!</p>
-                  <p className="text-xs text-gray-500">₹{data.total_amount} · Accept within 2 min</p>
-                </div>
-              </div>
-            ),
-            { duration: 6000 }
-          )
-        }
+      addPendingOrder(order)
+      playAlertBeep()
+      flashTitle(flashIntervalRef)
+      toast.custom(
+        (t) => (
+          <div
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg transition-all
+              bg-white border border-green-200 ${t.visible ? 'opacity-100' : 'opacity-0'}`}
+          >
+            <span className="text-xl">🛒</span>
+            <div>
+              <p className="font-semibold text-[#022135] text-sm">New Order!</p>
+              <p className="text-xs text-gray-500">₹{order.total_amount} · Accept within 2 min</p>
+            </div>
+          </div>
+        ),
+        { duration: 6000 },
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-          filter: `vendor_id=eq.${vendorId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<Order>) => {
-          const order = payload.new as Order
-          updateOrderStatus(order.id, order.status, order.updated_at)
-        }
-      )
-      .subscribe()
+    }
+
+    const onOrderStatus = (event: OrderStatusEvent) => {
+      updateOrderStatus(event.orderId, mapOrderStatus(event.status))
+    }
+
+    socket.on('new-order', onNewOrder)
+    socket.on('order-status', onOrderStatus)
 
     return () => {
-      supabase.removeChannel(channel)
+      socket.off('new-order', onNewOrder)
+      socket.off('order-status', onOrderStatus)
       if (flashIntervalRef.current) {
         clearInterval(flashIntervalRef.current)
         flashIntervalRef.current = null

@@ -1,57 +1,73 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
 import { OrdersClient } from './OrdersClient'
 import type { OrderWithItems } from './OrdersClient'
+import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
+import { fetchActiveOrders, fetchClosedOrders } from '@/lib/api'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { isDemoMode, DEMO_VENDOR_ID, getDemoActiveOrders, getDemoClosedOrders } from '@/lib/demo'
 
-export default async function OrdersPage() {
+interface OrdersData {
+  active: OrderWithItems[]
+  closed: OrderWithItems[]
+}
+
+export default function OrdersPage() {
+  const { vendor, loading: vendorLoading } = useRequireVendor()
+  const [data, setData] = useState<OrdersData | null>(null)
+
+  // Stable demo props — fresh arrays each render would re-seed state forever
+  const demoData = useMemo(
+    () =>
+      isDemoMode
+        ? {
+            active: getDemoActiveOrders() as unknown as OrderWithItems[],
+            closed: getDemoClosedOrders(),
+          }
+        : null,
+    [],
+  )
+
+  useEffect(() => {
+    if (isDemoMode || !vendor) return
+    let cancelled = false
+    Promise.all([fetchActiveOrders(vendor.id), fetchClosedOrders(vendor.id)])
+      .then(([active, closed]) => {
+        if (!cancelled) setData({ active, closed })
+      })
+      .catch(() => {
+        if (!cancelled) setData({ active: [], closed: [] })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [vendor])
+
   /* ── Demo mode ── */
-  if (isDemoMode) {
+  if (isDemoMode && demoData) {
     return (
       <OrdersClient
         vendorId={DEMO_VENDOR_ID}
-        initialActive={getDemoActiveOrders() as unknown as OrderWithItems[]}
-        initialClosed={getDemoClosedOrders()}
+        initialActive={demoData.active}
+        initialClosed={demoData.closed}
       />
     )
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/vendor/login')
-
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!vendor) redirect('/vendor/dashboard')
-
-  const [{ data: activeOrders }, { data: closedOrders }] = await Promise.all([
-    /* Active orders — full join with items */
-    supabase
-      .from('orders')
-      .select('*, order_items(*, catalog_item:catalog_items(*))')
-      .eq('vendor_id', vendor.id)
-      .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
-      .order('updated_at', { ascending: false }),
-
-    /* Closed orders — no items needed for list view */
-    supabase
-      .from('orders')
-      .select('id, vendor_id, customer_id, rider_id, status, total_amount, created_at, updated_at, rejection_reason, prescription_verified, prescription_url')
-      .eq('vendor_id', vendor.id)
-      .in('status', ['delivered', 'rejected', 'cancelled'])
-      .order('updated_at', { ascending: false })
-      .limit(60),
-  ])
+  if (vendorLoading || !vendor || !data) {
+    return (
+      <div className="space-y-5 max-w-4xl mx-auto">
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <Skeleton className="h-9 w-64 rounded-xl" />
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+        ))}
+      </div>
+    )
+  }
 
   return (
-    <OrdersClient
-      vendorId={vendor.id}
-      initialActive={(activeOrders ?? []) as OrderWithItems[]}
-      initialClosed={closedOrders ?? []}
-    />
+    <OrdersClient vendorId={vendor.id} initialActive={data.active} initialClosed={data.closed} />
   )
 }

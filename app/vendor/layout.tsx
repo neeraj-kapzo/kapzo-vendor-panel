@@ -13,7 +13,8 @@ import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
-import { createClient } from '@/lib/supabase/client'
+import { getFirebaseAuth } from '@/lib/firebase'
+import { disconnectSocket } from '@/lib/realtime'
 import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 
@@ -45,8 +46,8 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
       router.push('/vendor/login')
       return
     }
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    disconnectSocket()
+    await getFirebaseAuth().signOut()
     router.push('/vendor/login')
   }
 

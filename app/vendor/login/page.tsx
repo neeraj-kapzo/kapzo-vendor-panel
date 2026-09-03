@@ -1,10 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Clock, Ban, FlaskConical } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import {
+  RecaptchaVerifier,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
+  signOut,
+  type ConfirmationResult,
+} from 'firebase/auth'
+import { getFirebaseAuth } from '@/lib/firebase'
+import { ApiError, bootstrap, fetchVendorMe } from '@/lib/api'
 import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 import { OtpInput } from '@/components/auth/OtpInput'
 import { cn } from '@/lib/utils'
@@ -15,24 +23,6 @@ import toast from 'react-hot-toast'
 type Screen   = 'login' | 'pending' | 'banned'
 type AuthTab  = 'phone' | 'email'
 type OtpStep  = 'phone' | 'verify'
-
-/* ─── Post-auth routing ─────────────────────────────────────── */
-async function resolveVendorRoute(supabase: ReturnType<typeof createClient>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('status')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!vendor)                        return 'onboarding'
-  if (vendor.status === 'pending')    return 'pending'
-  if (vendor.status === 'banned')     return 'banned'
-  if (vendor.status === 'active')     return 'dashboard'
-  return 'pending'
-}
 
 /* ─── Main page ─────────────────────────────────────────────── */
 export default function VendorLoginPage() {
@@ -55,6 +45,10 @@ export default function VendorLoginPage() {
 
   const [loading, setLoading] = useState(false)
 
+  /* Firebase phone-auth plumbing */
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null)
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null)
+
   /* ── countdown timer for OTP resend ── */
   function startResendCountdown() {
     setResendSecs(30)
@@ -66,18 +60,39 @@ export default function VendorLoginPage() {
     }, 1000)
   }
 
-  /* ── post-auth: route based on vendor status ── */
+  /* ── post-auth: bootstrap on the backend, then route by vendor status ── */
   async function afterAuth() {
-    const supabase = createClient()
-    const dest = await resolveVendorRoute(supabase)
-
-    if (dest === 'onboarding') { router.push('/vendor/onboarding'); return }
-    if (dest === 'dashboard')  { router.push('/vendor/dashboard');  return }
-    if (dest === 'pending')    { setScreen('pending'); return }
-    if (dest === 'banned')     { setScreen('banned');  return }
+    const user = getFirebaseAuth().currentUser
+    if (!user) return
+    try {
+      await bootstrap(await user.getIdToken())
+      const me = await fetchVendorMe()
+      if (me.status === 'active')      { router.push('/vendor/dashboard'); return }
+      if (me.status === 'banned')      { setScreen('banned'); return }
+      setScreen('pending')
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+        // Signed in but not yet registered as a pharmacy. The backend guards
+        // GET /vendors/me with @Roles(VENDOR), so a fresh bootstrap (role
+        // CUSTOMER) gets 403 rather than 404 — both mean "go register".
+        router.push('/vendor/onboarding')
+        return
+      }
+      if (err instanceof ApiError && err.status === 409) {
+        // This phone/email already belongs to a Kapzo account created via
+        // the *other* Firebase provider. Firebase minted a new, unlinked uid
+        // for this sign-in; don't leave the user signed in as that orphan —
+        // sign out and surface the backend's instructions on how to link.
+        await signOut(getFirebaseAuth()).catch(() => undefined)
+        setOtpStep('phone'); setOtp(''); setConfirmation(null)
+        toast.error(err.message, { duration: 10000 })
+        return
+      }
+      toast.error(err instanceof Error ? err.message : 'Could not reach the Kapzo server')
+    }
   }
 
-  /* ── Phone OTP: step 1 — send OTP ── */
+  /* ── Phone OTP: step 1 — send OTP (Firebase phone auth) ── */
   async function sendOtp() {
     const cleaned = phone.replace(/\D/g, '')
     if (cleaned.length < 10) {
@@ -85,37 +100,38 @@ export default function VendorLoginPage() {
       return
     }
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: `+91${cleaned}`,
-    })
-    if (error) {
-      toast.error(error.message)
-    } else {
+    try {
+      const auth = getFirebaseAuth()
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+        })
+      }
+      const result = await signInWithPhoneNumber(auth, `+91${cleaned}`, recaptchaRef.current)
+      setConfirmation(result)
       toast.success('OTP sent to your phone')
       setOtpStep('verify')
       startResendCountdown()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send OTP')
+      recaptchaRef.current?.clear()
+      recaptchaRef.current = null
     }
     setLoading(false)
   }
 
   /* ── Phone OTP: step 2 — verify OTP ── */
   async function verifyOtp() {
-    if (otp.length < 6) { setOtpError(true); return }
+    if (otp.length < 6 || !confirmation) { setOtpError(true); return }
     setOtpError(false)
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.verifyOtp({
-      phone: `+91${phone.replace(/\D/g, '')}`,
-      token: otp,
-      type: 'sms',
-    })
-    if (error) {
-      setOtpError(true)
-      toast.error('Invalid OTP. Please try again.')
-    } else {
+    try {
+      await confirmation.confirm(otp)
       toast.success('Phone verified!')
       await afterAuth()
+    } catch {
+      setOtpError(true)
+      toast.error('Invalid OTP. Please try again.')
     }
     setLoading(false)
   }
@@ -131,12 +147,11 @@ export default function VendorLoginPage() {
     if (Object.keys(errs).length) return
 
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      toast.error(error.message)
-    } else {
+    try {
+      await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
       await afterAuth()
+    } catch {
+      toast.error('Invalid email or password')
     }
     setLoading(false)
   }
@@ -317,6 +332,9 @@ export default function VendorLoginPage() {
               Apply to partner with Kapzo
             </a>
           </p>
+
+          {/* Invisible reCAPTCHA anchor for Firebase phone auth */}
+          <div id="recaptcha-container" />
         </div>
       </div>
     </div>
@@ -329,8 +347,7 @@ function StatusScreen({ type }: { type: 'pending' | 'banned' }) {
   const isPending = type === 'pending'
 
   async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await getFirebaseAuth().signOut()
     router.push('/vendor/login')
   }
 

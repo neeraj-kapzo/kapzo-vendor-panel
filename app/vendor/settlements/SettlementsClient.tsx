@@ -10,7 +10,6 @@ import {
 import { StatsCard } from '@/components/vendor/StatsCard'
 import { cn, formatCurrency } from '@/lib/utils'
 import { isDemoMode, type DemoSettlement } from '@/lib/demo'
-import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
 /* ─── Types ─── */
@@ -418,32 +417,14 @@ export function SettlementsClient({
       return
     }
 
-    const supabase = createClient()
-    const now      = new Date()
-    const weekAgo  = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any)
-      .from('settlements')
-      .insert({
-        vendor_id:    vendorId,
-        amount:       currentPending,
-        status:       'pending',
-        period_start: weekAgo.toISOString(),
-        period_end:   now.toISOString(),
-      })
-      .select()
-      .single()
-
+    // Phase 1: vendor payouts are settled offline by the Kapzo team — there
+    // is no online withdrawal API yet.
     setWithdrawLoading(false)
-    if (error) {
-      toast.error('Failed to submit withdrawal request')
-      return
-    }
-    setSettlements((prev) => [data as Settlement, ...prev])
-    setCurrentPending(0)
     setShowWithdraw(false)
-    toast.success('Withdrawal request submitted!')
+    toast('Payouts are settled offline by Kapzo — our team will reach out with your settlement.', {
+      icon: '🏦',
+      duration: 6000,
+    })
   }, [vendorId, currentPending])
 
   /* ── Last status display ── */

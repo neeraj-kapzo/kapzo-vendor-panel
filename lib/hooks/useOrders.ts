@@ -1,56 +1,46 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { fetchActiveOrders } from '@/lib/api'
+import { getSocket } from '@/lib/realtime'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { isDemoMode } from '@/lib/demo'
-import type { Order } from '@/types/database.types'
 
 /**
  * Legacy hook — still used by OrdersClient for its internal refetch pattern.
- * For new code prefer useRealtimeOrders which handles INSERT vs UPDATE separately.
+ * For new code prefer useRealtimeOrders which handles new-order vs
+ * order-status events separately.
  */
 export function useOrders(vendorId: string | undefined) {
   const { activeOrders, setActiveOrders } = useVendorStore()
 
   const fetchOrders = useCallback(async () => {
-    // In demo mode the store is seeded by the server page; skip Supabase
+    // In demo mode the store is seeded by the page; skip the backend
     if (!vendorId || isDemoMode) return
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('vendor_id', vendorId)
-      .in('status', ['pending', 'accepted', 'packing', 'packed', 'dispatched'])
-      .order('created_at', { ascending: false })
-
-    if (data) setActiveOrders(data as Order[])
+    try {
+      setActiveOrders(await fetchActiveOrders(vendorId))
+    } catch {
+      /* transient fetch failure — keep current list */
+    }
   }, [vendorId, setActiveOrders])
 
   useEffect(() => {
-    fetchOrders()
+    void fetchOrders()
   }, [fetchOrders])
 
-  // Real-time subscription (catch-all fallback) — skipped in demo mode
+  // Real-time subscription (catch-all fallback) — refetch on any order event
   useEffect(() => {
     if (!vendorId || isDemoMode) return
-    const supabase = createClient()
+    const socket = getSocket()
+    const refetch = () => void fetchOrders()
 
-    const channel = supabase
-      .channel('vendor-orders-legacy')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
-          filter: `vendor_id=eq.${vendorId}`,
-        },
-        () => { fetchOrders() }
-      )
-      .subscribe()
+    socket.on('new-order', refetch)
+    socket.on('order-status', refetch)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      socket.off('new-order', refetch)
+      socket.off('order-status', refetch)
+    }
   }, [vendorId, fetchOrders])
 
   return { orders: activeOrders, refetch: fetchOrders }

@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import {
   Building2, User, Phone, Mail, MapPin,
   FileText, CheckCircle2, Upload, ArrowRight, ArrowLeft, Loader2,
+  LocateFixed,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { registerVendor, uploadFile } from '@/lib/api'
+import { waitForUser } from '@/lib/firebase'
 import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 import { KapzoLogo } from '@/components/auth/KapzoLogo'
 import { cn } from '@/lib/utils'
@@ -19,13 +21,18 @@ interface FormData {
   phone: string
   email: string
   address: string
+  licenseNumber: string
   licenseFile: File | null
+  /** GCS object key returned by the signed-URL upload. */
   licenseUrl: string
+  lat: number | null
+  lng: number | null
 }
 
 const INITIAL: FormData = {
   pharmacyName: '', contactPerson: '', phone: '', email: '',
-  address: '', licenseFile: null, licenseUrl: '',
+  address: '', licenseNumber: '', licenseFile: null, licenseUrl: '',
+  lat: null, lng: null,
 }
 
 const STEPS = [
@@ -43,22 +50,21 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
 
-  /* pre-fill phone + email from auth user */
+  /* pre-fill phone + email from the Firebase user */
   useEffect(() => {
     async function prefill() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await waitForUser()
       if (!user) { router.push('/vendor/login'); return }
       setForm((f) => ({
         ...f,
-        phone: user.phone ?? '',
+        phone: (user.phoneNumber ?? '').replace(/^\+91/, ''),
         email: user.email ?? '',
       }))
     }
     prefill()
   }, [router])
 
-  function set(key: keyof FormData, value: string | File | null) {
+  function set(key: keyof FormData, value: string | File | number | null) {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((e) => ({ ...e, [key]: undefined }))
   }
@@ -75,8 +81,11 @@ export default function OnboardingPage() {
         errs.email = 'Enter a valid email address'
     }
     if (s === 2) {
-      if (!form.address.trim())    errs.address    = 'Full address is required'
-      if (!form.licenseUrl)        errs.licenseFile = 'Drug license document is required'
+      if (!form.address.trim())        errs.address       = 'Full address is required'
+      if (!form.licenseNumber.trim())  errs.licenseNumber = 'Drug license number is required'
+      if (!form.licenseUrl)            errs.licenseFile   = 'Drug license document is required'
+      if (form.lat === null || form.lng === null)
+        errs.lat = 'Capture your pharmacy location — riders and customers are matched by it'
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -91,33 +100,17 @@ export default function OnboardingPage() {
   async function submit() {
     setLoading(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      /* Insert vendor row */
-      const { error: vendorErr } = await supabase.from('vendors').insert({
-        user_id:        user.id,
-        pharmacy_name:  form.pharmacyName.trim(),
-        contact_person: form.contactPerson.trim(),
-        phone:          form.phone.replace(/\D/g, ''),
-        email:          form.email.trim(),
-        address:        form.address.trim(),
-        license_url:    form.licenseUrl,
-        status:         'pending',
-        is_online:      false,
+      // Creates the PENDING Vendor row and flips the user's role to VENDOR;
+      // Kapzo admins are notified through the backend's own pipeline.
+      await registerVendor({
+        pharmacyName:   form.pharmacyName.trim(),
+        licenseNumber:  form.licenseNumber.trim(),
+        licenseFileKey: form.licenseUrl,
+        contactPhone:   form.phone.replace(/\D/g, ''),
+        addressLine:    form.address.trim(),
+        lat:            form.lat!,
+        lng:            form.lng!,
       })
-      if (vendorErr) throw vendorErr
-
-      /* Insert admin notification */
-      await supabase.from('notifications').insert({
-        type:    'vendor_onboarded',
-        title:   'New Pharmacy Application',
-        message: `${form.pharmacyName} has submitted an onboarding application.`,
-        data:    { pharmacy_name: form.pharmacyName, email: form.email, user_id: user.id },
-        recipient_role: 'admin',
-      })
-
       setDone(true)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong')
@@ -315,28 +308,41 @@ function Step2({ form, set, errors }: StepProps) {
       setProgress((p) => Math.min(p + Math.random() * 12, 85))
     }, 200)
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const ext  = file.name.split('.').pop()
-    const path = `${user?.id ?? 'unknown'}/${Date.now()}_license.${ext}`
-
-    const { data, error } = await supabase.storage
-      .from('vendor-licenses')
-      .upload(path, file, { upsert: true })
-
-    clearInterval(interval)
-
-    if (error) {
-      toast.error('Upload failed: ' + error.message)
-      setProgress(0)
-    } else {
+    try {
+      // Signed GCS upload via the backend storage module
+      const key = await uploadFile('license', file)
       setProgress(100)
-      const { data: url } = supabase.storage.from('vendor-licenses').getPublicUrl(data.path)
-      set('licenseUrl', url.publicUrl)
+      set('licenseUrl', key)
       set('licenseFile', file)
       toast.success('License uploaded!')
+    } catch (err) {
+      toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'unknown error'))
+      setProgress(0)
     }
+    clearInterval(interval)
     setUploading(false)
+  }
+
+  const [locating, setLocating] = useState(false)
+  function captureLocation() {
+    if (!navigator.geolocation) {
+      toast.error('Location is not available in this browser')
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        set('lat', pos.coords.latitude)
+        set('lng', pos.coords.longitude)
+        setLocating(false)
+        toast.success('Location captured')
+      },
+      () => {
+        setLocating(false)
+        toast.error('Could not get your location — allow location access and retry')
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    )
   }
 
   return (
@@ -348,6 +354,48 @@ function Step2({ form, set, errors }: StepProps) {
           value={form.address}
           onChange={(e) => set('address', e.target.value)}
           className={cn(inputCls(!!errors.address), 'resize-none h-auto py-3 leading-relaxed')}
+        />
+      </FormField>
+
+      <FormField label="Pharmacy Location" error={errors.lat} icon={<LocateFixed size={15} />}>
+        {form.lat !== null && form.lng !== null ? (
+          <div className="flex items-center justify-between p-3.5 bg-[#21A053]/8 border border-[#21A053]/30 rounded-xl">
+            <span className="flex items-center gap-2 text-sm font-medium text-[#022135]">
+              <CheckCircle2 size={16} className="text-[#21A053] shrink-0" />
+              {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
+            </span>
+            <button
+              onClick={captureLocation}
+              className="text-xs text-slate-400 hover:text-[#21A053] transition-colors ml-3 shrink-0"
+            >
+              Re-capture
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={captureLocation}
+            disabled={locating}
+            className={cn(
+              'w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm font-semibold transition-all',
+              errors.lat
+                ? 'border-red-400 bg-red-50 text-red-500'
+                : 'border-[#21A053]/40 text-[#21A053] hover:bg-[#21A053]/6 hover:border-[#21A053]/70',
+            )}
+          >
+            {locating ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
+            {locating ? 'Locating…' : 'Use my current location'}
+          </button>
+        )}
+      </FormField>
+
+      <FormField label="Drug License Number" error={errors.licenseNumber} icon={<FileText size={15} />}>
+        <input
+          type="text"
+          placeholder="e.g. MH-MUM-123456"
+          value={form.licenseNumber}
+          onChange={(e) => set('licenseNumber', e.target.value)}
+          className={inputCls(!!errors.licenseNumber)}
         />
       </FormField>
 
@@ -425,6 +473,9 @@ function Step3({ form }: { form: FormData }) {
     ['Phone',          '+91 ' + form.phone],
     ['Email',           form.email],
     ['Address',         form.address],
+    ['Location',        form.lat !== null && form.lng !== null
+                          ? `${form.lat.toFixed(5)}, ${form.lng.toFixed(5)}` : '—'],
+    ['License No.',     form.licenseNumber],
     ['Drug License',    form.licenseFile?.name ?? '—'],
   ]
   return (
@@ -451,7 +502,7 @@ function Step3({ form }: { form: FormData }) {
 /* ─── Shared helpers ─────────────────────────────────────────── */
 interface StepProps {
   form: FormData
-  set: (key: keyof FormData, value: string | File | null) => void
+  set: (key: keyof FormData, value: string | File | number | null) => void
   errors: Partial<Record<keyof FormData, string>>
 }
 

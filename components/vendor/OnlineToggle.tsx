@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { setVendorOnline } from '@/lib/api'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { Modal } from '@/components/ui/Modal'
 import { isDemoMode } from '@/lib/demo'
@@ -20,7 +20,7 @@ export function OnlineToggle({ variant = 'prominent' }: OnlineToggleProps) {
   async function applyToggle(online: boolean) {
     if (!vendor) return
 
-    // Demo mode — update local state only, no Supabase
+    // Demo mode — update local state only, no backend
     if (isDemoMode) {
       setIsOnline(online)
       toast.success(online ? "You're live — accepting orders" : "You're now offline")
@@ -29,17 +29,12 @@ export function OnlineToggle({ variant = 'prominent' }: OnlineToggleProps) {
     }
 
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('vendors')
-      .update({ is_online: online })
-      .eq('id', vendor.id)
-
-    if (error) {
-      toast.error('Failed to update status')
-    } else {
-      setIsOnline(online)
+    try {
+      const updated = await setVendorOnline(online)
+      setIsOnline(updated.is_online)
       toast.success(online ? "You're live — accepting orders" : "You're now offline")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status')
     }
     setLoading(false)
     setConfirmOpen(false)

@@ -6,11 +6,9 @@
  * render with the data exported from this file.
  */
 
-import type { Vendor, Order, OrderStatus } from '@/types/database.types'
-import type { Database } from '@/types/database.types'
-
-type OrderItem   = Database['public']['Tables']['order_items']['Row']
-type CatalogItem = Database['public']['Tables']['catalog_items']['Row']
+import type {
+  Vendor, Order, OrderStatus, OrderItem, CatalogItem,
+} from '@/types/database.types'
 
 /* ── Structural equivalents (no client-component import needed) ────── */
 
