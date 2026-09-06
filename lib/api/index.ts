@@ -38,6 +38,26 @@ export async function fetchVendorMe(): Promise<Vendor> {
   return mapVendor(row, getFirebaseAuth().currentUser?.email)
 }
 
+/**
+ * Self-service profile edit. Only these two fields are editable: licence,
+ * commission, verification status, and the contact phone (which is also the
+ * Firebase login identity) are admin-owned and rejected/stripped by the
+ * backend. Changing the address re-geocodes it server-side, so a vague
+ * address comes back as a 400 the caller should surface verbatim.
+ */
+export interface UpdateVendorMeInput {
+  pharmacyName?: string
+  addressLine?: string
+}
+
+export async function updateVendorMe(input: UpdateVendorMeInput): Promise<Vendor> {
+  const row = await api<BackendVendor>('/vendors/me', {
+    method: 'PATCH',
+    body: input,
+  })
+  return mapVendor(row, getFirebaseAuth().currentUser?.email)
+}
+
 export async function setVendorOnline(isOnline: boolean): Promise<Vendor> {
   const row = await api<BackendVendor>('/vendors/me/online', {
     method: 'POST',

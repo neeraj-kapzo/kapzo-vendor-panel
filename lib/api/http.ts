@@ -19,7 +19,7 @@ export function apiBaseUrl(): string {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: Record<string, string | number | boolean | undefined>
   /** Skip the Authorization header (only /auth/bootstrap sets its own). */
