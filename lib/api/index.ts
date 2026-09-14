@@ -39,15 +39,29 @@ export async function fetchVendorMe(): Promise<Vendor> {
 }
 
 /**
- * Self-service profile edit. Only these two fields are editable: licence,
- * commission, verification status, and the contact phone (which is also the
- * Firebase login identity) are admin-owned and rejected/stripped by the
- * backend. Changing the address re-geocodes it server-side, so a vague
- * address comes back as a 400 the caller should surface verbatim.
+ * Self-service profile edit. Licence (number + document), FSSAI certificate,
+ * bank details, commission, verification status and the contact phone (which
+ * is also the Firebase login identity) are admin-owned — the backend's
+ * whitelist strips anything else in the payload. Changing the address
+ * re-geocodes it server-side, so a vague address comes back as a 400 the
+ * caller should surface verbatim. `null` clears a nullable field.
  */
 export interface UpdateVendorMeInput {
   pharmacyName?: string
   addressLine?: string
+  altPhone?: string | null
+  /**
+   * The pharmacy's map pin, sent together or not at all (the backend 400s on
+   * one without the other). Editing `addressLine` never moves it: the pin is
+   * set by dropping a marker, so a typo in the address text can't quietly
+   * relocate where riders are sent.
+   */
+  lat?: number
+  lng?: number
+  workingDays?: string[]
+  /** "HH:mm", 24-hour. */
+  workingHoursStart?: string | null
+  workingHoursEnd?: string | null
 }
 
 export async function updateVendorMe(input: UpdateVendorMeInput): Promise<Vendor> {

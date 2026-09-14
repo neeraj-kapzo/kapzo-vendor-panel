@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrdersClient } from './OrdersClient'
 import type { OrderWithItems } from './OrdersClient'
 import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
@@ -16,6 +16,9 @@ interface OrdersData {
 export default function OrdersPage() {
   const { vendor, loading: vendorLoading } = useRequireVendor()
   const [data, setData] = useState<OrdersData | null>(null)
+  // "Latest request wins" — see the identical comment in inventory/page.tsx
+  // for why this isn't a one-shot "already started" guard.
+  const fetchIdRef = useRef(0)
 
   // Stable demo props — fresh arrays each render would re-seed state forever
   const demoData = useMemo(
@@ -31,17 +34,14 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (isDemoMode || !vendor) return
-    let cancelled = false
+    const fetchId = ++fetchIdRef.current
     Promise.all([fetchActiveOrders(vendor.id), fetchClosedOrders(vendor.id)])
       .then(([active, closed]) => {
-        if (!cancelled) setData({ active, closed })
+        if (fetchIdRef.current === fetchId) setData({ active, closed })
       })
       .catch(() => {
-        if (!cancelled) setData({ active: [], closed: [] })
+        if (fetchIdRef.current === fetchId) setData({ active: [], closed: [] })
       })
-    return () => {
-      cancelled = true
-    }
   }, [vendor])
 
   /* ── Demo mode ── */

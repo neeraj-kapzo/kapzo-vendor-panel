@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Clock, Ban, FlaskConical } from 'lucide-react'
+import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, RefreshCw, Ban, FlaskConical } from 'lucide-react'
 import {
   RecaptchaVerifier,
   signInWithEmailAndPassword,
@@ -20,7 +20,10 @@ import { isDemoMode } from '@/lib/demo'
 import toast from 'react-hot-toast'
 
 /* ─── Types ─────────────────────────────────────────────────── */
-type Screen   = 'login' | 'pending' | 'banned'
+// No 'pending' screen: a pending vendor signs in to the profile page, where
+// the banner explains where their application stands and they can still fix
+// the details under review. Only a banned account is a dead end here.
+type Screen   = 'login' | 'banned'
 type AuthTab  = 'phone' | 'email'
 type OtpStep  = 'phone' | 'verify'
 
@@ -60,29 +63,53 @@ export default function VendorLoginPage() {
     }, 1000)
   }
 
-  /* ── post-auth: bootstrap on the backend, then route by vendor status ── */
+  /* ── post-auth: resolve the vendor, then route by status ── */
+  /**
+   * `GET /vendors/me` comes FIRST and `/auth/bootstrap` is only reached when
+   * there is no vendor to resolve.
+   *
+   * Bootstrap exists to create the CUSTOMER row a *self-signing-up* pharmacy
+   * needs before `/vendor/onboarding` can promote it. An admin-provisioned
+   * vendor (now the only supported route in, bulk CSV import included) already
+   * has its User row, so for them bootstrap can do nothing useful — but it
+   * *can* fail: it 409s when the token's phone or email already belongs to
+   * another User row, which used to block a perfectly valid email+password
+   * sign-in before `/vendors/me` was ever tried. The pharmacist and admin
+   * panels never call bootstrap for exactly this reason.
+   */
   async function afterAuth() {
     const user = getFirebaseAuth().currentUser
     if (!user) return
     try {
-      await bootstrap(await user.getIdToken())
       const me = await fetchVendorMe()
-      if (me.status === 'active')      { router.push('/vendor/dashboard'); return }
-      if (me.status === 'banned')      { setScreen('banned'); return }
-      setScreen('pending')
+      if (me.status === 'banned') { setScreen('banned'); return }
+      // Pending vendors land on their profile; everyone else on the dashboard.
+      router.push(me.status === 'active' ? '/vendor/dashboard' : '/vendor/profile')
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
-        // Signed in but not yet registered as a pharmacy. The backend guards
-        // GET /vendors/me with @Roles(VENDOR), so a fresh bootstrap (role
-        // CUSTOMER) gets 403 rather than 404 — both mean "go register".
-        router.push('/vendor/onboarding')
+      // 401 = no User row for this Firebase uid at all (a brand-new phone-OTP
+      // sign-in); 403 = a User row exists but isn't a VENDOR yet (bootstrap
+      // creates CUSTOMER, and GET /vendors/me is @Roles(VENDOR)); 404 = the
+      // Vendor row is gone. All three mean "there is no pharmacy here yet",
+      // which is the one case bootstrap + onboarding is for.
+      if (err instanceof ApiError && [401, 403, 404].includes(err.status)) {
+        await bootstrapThenOnboard(user)
         return
       }
+      toast.error(err instanceof Error ? err.message : 'Could not reach the Kapzo server')
+    }
+  }
+
+  /** The self-signup tail: ensure a User row exists, then go register. */
+  async function bootstrapThenOnboard(user: { getIdToken: () => Promise<string> }) {
+    try {
+      await bootstrap(await user.getIdToken())
+      router.push('/vendor/onboarding')
+    } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // This phone/email already belongs to a Kapzo account created via
-        // the *other* Firebase provider. Firebase minted a new, unlinked uid
-        // for this sign-in; don't leave the user signed in as that orphan —
-        // sign out and surface the backend's instructions on how to link.
+        // Genuinely ambiguous now: this phone/email already belongs to another
+        // Kapzo account, and Firebase minted a separate unlinked uid for this
+        // sign-in. Don't leave the user signed in as that orphan — sign out
+        // and surface the backend's instructions on how to link the methods.
         await signOut(getFirebaseAuth()).catch(() => undefined)
         setOtpStep('phone'); setOtp(''); setConfirmation(null)
         toast.error(err.message, { duration: 10000 })
@@ -156,11 +183,8 @@ export default function VendorLoginPage() {
     setLoading(false)
   }
 
-  /* ─── Pending screen ─── */
-  if (screen === 'pending') return <StatusScreen type="pending" />
-
   /* ─── Banned screen ─── */
-  if (screen === 'banned') return <StatusScreen type="banned" />
+  if (screen === 'banned') return <StatusScreen />
 
   /* ─── Login form ─── */
   return (
@@ -341,10 +365,9 @@ export default function VendorLoginPage() {
   )
 }
 
-/* ─── Status screens ─────────────────────────────────────────── */
-function StatusScreen({ type }: { type: 'pending' | 'banned' }) {
+/* ─── Suspended-account screen ───────────────────────────────── */
+function StatusScreen() {
   const router  = useRouter()
-  const isPending = type === 'pending'
 
   async function handleLogout() {
     await getFirebaseAuth().signOut()
@@ -356,23 +379,15 @@ function StatusScreen({ type }: { type: 'pending' | 'banned' }) {
       <AuthBrandPanel />
       <div className="flex-1 flex items-center justify-center p-6 bg-white">
         <div className="w-full max-w-sm text-center animate-fade-in-up space-y-5">
-          <div className={cn(
-            'w-20 h-20 rounded-2xl flex items-center justify-center mx-auto',
-            isPending ? 'bg-amber-50' : 'bg-red-50'
-          )}>
-            {isPending
-              ? <Clock size={36} className="text-amber-500" />
-              : <Ban  size={36} className="text-red-500" />}
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto bg-red-50">
+            <Ban size={36} className="text-red-500" />
           </div>
 
           <div>
-            <h2 className="text-xl font-bold text-[#022135]">
-              {isPending ? 'Verification Pending' : 'Account Suspended'}
-            </h2>
+            <h2 className="text-xl font-bold text-[#022135]">Account Suspended</h2>
             <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-              {isPending
-                ? 'Your pharmacy application is under review. Our team will verify your details within 24 hours. You\'ll receive an SMS once approved.'
-                : 'Your pharmacy account has been suspended. Please contact Kapzo support for assistance.'}
+              Your pharmacy account has been suspended. Please contact Kapzo support
+              for assistance.
             </p>
           </div>
 

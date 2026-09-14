@@ -16,6 +16,13 @@ to this panel.
 
 ## 0. Routine release (copy-paste)
 
+**Scripted:** `bash docs/deploy.sh` runs every step below (preflight, build,
+sanity checks, upload, cache headers, live verification) and stops at the
+first failure. `--dry-run` builds and checks without uploading; `--skip-build`
+uploads an existing `out/`. The Firebase web API key and the (optional)
+Google Maps API key / Map ID are read from the environment or `.env.local`.
+The manual steps are kept here for reference.
+
 Run from this directory, on the commit you want to ship, with `gcloud` logged in
 as a `kapzo-prod` editor (`gcloud config set project kapzo-prod`).
 
@@ -29,7 +36,9 @@ export NEXT_PUBLIC_FIREBASE_API_KEY=<web API key: Firebase console > kapzo-prod 
 export NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=kapzo-prod.firebaseapp.com
 export NEXT_PUBLIC_FIREBASE_PROJECT_ID=kapzo-prod
 export NEXT_PUBLIC_FIREBASE_APP_ID=1:756344915330:web:90c5a71d2c9437760a3b9b
-rm -rf .next out && pnpm build
+export NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<Maps JS API key — optional, picker falls back to pasting a Maps link>
+export NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=<vector Map ID — optional, falls back to Google's watermarked DEMO_MAP_ID>
+rm -rf .next out && pnpm build   # runs next build + scripts/fix-segment-files.mjs (see §1)
 
 # 2. Sanity-check the bundle before uploading.
 grep -l "api.kapzo.in" out/_next/static/chunks/*.js | head -1      # must print a file
@@ -79,6 +88,14 @@ browser -> DNS: vendor.kapzo.in -> 8.233.74.117 (shared static IP kapzo-api-ip)
   They are the React Server Component payloads the Next router fetches for
   soft navigation between pages; leaving them out makes every link a full
   reload.
+- **Windows builds:** Next.js 16.1.6's exporter derives the segment file names
+  with `path.relative`, so on Windows the nested part carries backslashes and
+  `__next.vendor.orders.txt` is written as the folder `__next.vendor/orders.txt`.
+  The router requests the flat dotted name, so every nested-route prefetch 404s
+  and each sidebar click becomes a full reload. `pnpm build` therefore runs
+  `scripts/fix-segment-files.mjs`, which flattens those folders (a no-op on
+  Linux/macOS). Sanity check after a build: `find out -type d -name '__next.*'`
+  must print nothing. Found and fixed 2026-09-06.
 - Unknown paths return the exported `404.html` with a real 404 status.
 - Host rules and path matchers live only in the GCP URL map resource, not in
   this repo. Inspect them with
@@ -122,6 +139,8 @@ design and is restricted by the authorized-domains list).
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `kapzo-prod.firebaseapp.com` |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `kapzo-prod` |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | `1:756344915330:web:90c5a71d2c9437760a3b9b` |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps JS API key, restricted to this panel's origins — optional; blank degrades the profile's location picker to pasting a Maps link |
+| `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | Vector Map ID for the picker's `AdvancedMarkerElement` — optional; blank falls back to Google's `DEMO_MAP_ID`, which renders but shows a "for development purposes only" watermark |
 
 ---
 
@@ -138,4 +157,5 @@ design and is restricted by the authorized-domains list).
 | Old UI still showing after deploy | HTML should be `no-cache`; check with `curl -sI https://vendor.kapzo.in/vendor/login/` and look at `cache-control`. If wrong, re-run step 4 or invalidate the CDN (§0). |
 | Cert domain status `FAILED_NOT_VISIBLE`, or the host opens a Hostinger 403 page while the LB IP works | A stray **AAAA** record on `vendor.kapzo.in` (Hostinger adds one pointing at its own hosting when a subdomain is created via the Websites flow). Delete it in hPanel DNS; verify with `nslookup -type=AAAA vendor.kapzo.in ns1.dns-parking.com`. Google re-validates on its own; ISP resolvers may cache the old answer for ~25 min. Seen 2026-09-02. |
 | TLS handshake fails / `HTTP 000` on the hostname | Managed cert not `ACTIVE`; check `gcloud compute ssl-certificates describe kapzo-panels-cert --global`. Usually DNS. |
+| `__next.<route>.txt?_rsc=…` requests return 404 and links do full reloads | Build was made on Windows without the flatten step (see §1). Run `node scripts/fix-segment-files.mjs out` (or just `pnpm build`, which includes it) and re-upload with step 3. |
 | `gcloud storage objects update "gs://.../**.txt"` hangs | Seen once on 2026-09-02; leave the `.txt` files with default cache headers (CDN does not cache `text/plain` under `CACHE_ALL_STATIC`). |

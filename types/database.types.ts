@@ -28,8 +28,10 @@ export interface Vendor {
   email: string
   phone: string
   alt_phone: string | null
+  /** Signed read URL, valid ~15 min. Null when no document is on file. */
   license_url: string | null
   fssai_url: string | null
+  license_number?: string
   contact_person: string
   address: string
   bank_account_holder: string | null
@@ -46,8 +48,9 @@ export interface Vendor {
   commission_percent?: number
   /** GCS object key of the uploaded license (not a browsable URL). */
   license_file_key?: string | null
-  lat?: number
-  lng?: number
+  /** Map pin; null until the vendor (or Kapzo support) sets it. */
+  lat: number | null
+  lng: number | null
 }
 
 export interface CatalogItem {

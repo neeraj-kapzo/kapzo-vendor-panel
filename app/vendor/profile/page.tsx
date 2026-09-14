@@ -6,7 +6,9 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { isDemoMode, DEMO_VENDOR } from '@/lib/demo'
 
 export default function ProfilePage() {
-  const { vendor, loading } = useRequireVendor()
+  // The only page that accepts a pending vendor — they sign in to check where
+  // their application stands and to correct the details under review.
+  const { vendor, loading } = useRequireVendor({ allowPending: true })
 
   if (isDemoMode) {
     return <ProfileClient vendor={DEMO_VENDOR} />

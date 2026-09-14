@@ -7,7 +7,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, ShoppingBag, Package,
   Clock as HistoryIcon, LogOut, ChevronLeft, FlaskConical,
-  Wallet, HelpCircle, UserCircle,
+  Wallet, HelpCircle, UserCircle, Clock,
 } from 'lucide-react'
 import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
@@ -27,6 +27,15 @@ const navItems = [
   { label: 'Help Centre',  href: '/vendor/help',        icon: HelpCircle,   badge: false }
 ]
 
+/**
+ * What a pending pharmacy sees in the sidebar. Everything else needs an
+ * approved account to mean anything — there are no orders, no inventory and no
+ * settlements before verification — and `useRequireVendor` would bounce them
+ * back to the profile anyway, so offering the links would just be a trap.
+ * Help Centre stays because that is where their questions go.
+ */
+const PENDING_NAV_HREFS = new Set(['/vendor/help'])
+
 /* Pages that render full-screen without the sidebar shell */
 const SHELL_EXCLUDED = ['/vendor/login', '/vendor/onboarding']
 
@@ -38,6 +47,11 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
 
   const { vendor } = useVendor()
   const { unreadOrderCount: pendingOrderCount } = useVendorStore()
+
+  const isPending = vendor?.status === 'pending'
+  const visibleNav = isPending
+    ? navItems.filter((item) => PENDING_NAV_HREFS.has(item.href))
+    : navItems
 
   if (SHELL_EXCLUDED.some((p) => pathname.startsWith(p))) return <>{children}</>
 
@@ -92,7 +106,7 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
 
         {/* Nav */}
         <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          {navItems.map(({ label, href, icon: Icon, badge }) => {
+          {visibleNav.map(({ label, href, icon: Icon, badge }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             const count  = badge ? pendingOrderCount : 0
 
@@ -162,7 +176,19 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
             )}
           </Link>
 
-          {!collapsed && <OnlineToggle variant="compact" />}
+          {!collapsed && (isPending ? (
+            <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-400/10 border border-amber-300/25">
+              <Clock size={14} className="text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-amber-300">Awaiting approval</p>
+                <p className="text-[10px] text-white/40 leading-snug mt-0.5">
+                  You can go online once Kapzo verifies your pharmacy.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <OnlineToggle variant="compact" />
+          ))}
 
           {/* Logout */}
           <button
@@ -190,6 +216,19 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
           sidebarOpen={sidebarOpen}
         />
+
+        {/* Verification-pending banner */}
+        {isPending && (
+          <div className="shrink-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-2 bg-amber-400/15 border-b border-amber-300/40">
+            <Clock size={13} className="text-amber-600 shrink-0" />
+            <p className="text-[11px] font-semibold text-amber-800">
+              Verification pending — Kapzo is reviewing your pharmacy.
+            </p>
+            <p className="text-[11px] text-amber-700">
+              You can keep your profile up to date in the meantime; orders open up once you’re approved.
+            </p>
+          </div>
+        )}
 
         {/* Demo mode banner */}
         {isDemoMode && (

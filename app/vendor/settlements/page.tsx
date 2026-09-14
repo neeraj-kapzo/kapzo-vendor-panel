@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { SettlementsClient } from './SettlementsClient'
 import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
 import { fetchVendorStats } from '@/lib/api'
@@ -13,26 +13,26 @@ import {
 export default function SettlementsPage() {
   const { vendor, loading: vendorLoading } = useRequireVendor()
   const [pendingAmount, setPendingAmount] = useState<number | null>(null)
+  // "Latest request wins" — see the identical comment in inventory/page.tsx
+  // for why this isn't a one-shot "already started" guard.
+  const fetchIdRef = useRef(0)
 
   // Stable demo stats — recomputing every render would re-seed client state
   const demoStats = useMemo(() => (isDemoMode ? getDemoSettlementStats() : null), [])
 
   useEffect(() => {
     if (isDemoMode || !vendor) return
-    let cancelled = false
+    const fetchId = ++fetchIdRef.current
     // Phase 1: payouts are settled offline, so there is no settlement ledger
     // yet — the pending balance is the last 30 days' earnings from the
     // backend stats endpoint (gross sales minus Kapzo commission).
     fetchVendorStats('month')
       .then((stats) => {
-        if (!cancelled) setPendingAmount(stats.earnings)
+        if (fetchIdRef.current === fetchId) setPendingAmount(stats.earnings)
       })
       .catch(() => {
-        if (!cancelled) setPendingAmount(0)
+        if (fetchIdRef.current === fetchId) setPendingAmount(0)
       })
-    return () => {
-      cancelled = true
-    }
   }, [vendor])
 
   /* ── Demo mode ── */

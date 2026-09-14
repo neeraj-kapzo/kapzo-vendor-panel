@@ -17,15 +17,18 @@ export type DemoOrderWithItems = Order & {
 }
 
 export type DemoMergedInventoryItem = {
-  catalog_id:   string
-  name:         string
-  salt_name:    string | null
-  image_url:    string | null
-  mrp:          number
-  inv_id:       string | null
-  vendor_price: number
-  stock_qty:    number
-  is_available: boolean
+  catalog_id:            string
+  name:                  string
+  salt_name:             string | null
+  image_url:             string | null
+  mrp:                   number
+  inv_id:                string | null
+  vendor_price:          number
+  stock_qty:             number
+  is_available:          boolean
+  manufacturer:          string
+  category:              string
+  requires_prescription: boolean
 }
 
 export type DemoHistoryOrderItem = {
@@ -64,6 +67,7 @@ export const DEMO_VENDOR: Vendor = {
   is_online:            true,
   license_url:          null,
   fssai_url:            null,
+  license_number:       'MH-MUM-20B-114509',
   bank_account_holder:  'Arjun Sharma',
   bank_name:            'State Bank of India',
   bank_account_number:  '30987654321',
@@ -71,24 +75,26 @@ export const DEMO_VENDOR: Vendor = {
   working_hours_start:  '09:00',
   working_hours_end:    '21:00',
   working_days:         ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  lat:                  19.0596,
+  lng:                  72.8295,
   created_at:           '2025-01-15T00:00:00.000Z',
 }
 
 /* ── Catalog ─────────────────────────────────────────────────────── */
 
 const DEMO_CATALOG: CatalogItem[] = [
-  { id: 'cat-01', name: 'Paracetamol 500mg',   salt_name: 'Paracetamol',            mrp:  25.00, image_url: null, created_by_admin: true },
-  { id: 'cat-02', name: 'Amoxicillin 250mg',   salt_name: 'Amoxicillin Trihydrate', mrp:  85.00, image_url: null, created_by_admin: true },
-  { id: 'cat-03', name: 'Azithromycin 500mg',  salt_name: 'Azithromycin',           mrp: 140.00, image_url: null, created_by_admin: true },
-  { id: 'cat-04', name: 'Metformin 500mg',     salt_name: 'Metformin HCl',          mrp:  35.00, image_url: null, created_by_admin: true },
-  { id: 'cat-05', name: 'Atorvastatin 10mg',   salt_name: 'Atorvastatin',           mrp: 120.00, image_url: null, created_by_admin: true },
-  { id: 'cat-06', name: 'Omeprazole 20mg',     salt_name: 'Omeprazole',             mrp:  45.00, image_url: null, created_by_admin: true },
-  { id: 'cat-07', name: 'Cetirizine 10mg',     salt_name: 'Cetirizine HCl',         mrp:  30.00, image_url: null, created_by_admin: true },
-  { id: 'cat-08', name: 'Ibuprofen 400mg',     salt_name: 'Ibuprofen',              mrp:  55.00, image_url: null, created_by_admin: true },
-  { id: 'cat-09', name: 'Pantoprazole 40mg',   salt_name: 'Pantoprazole',           mrp:  65.00, image_url: null, created_by_admin: true },
-  { id: 'cat-10', name: 'Dolo 650mg',          salt_name: 'Paracetamol',            mrp:  30.00, image_url: null, created_by_admin: true },
-  { id: 'cat-11', name: 'Vitamin D3 60000IU',  salt_name: 'Cholecalciferol',        mrp: 180.00, image_url: null, created_by_admin: true },
-  { id: 'cat-12', name: 'Multivitamin Tablets',salt_name: 'Vitamins & Minerals',    mrp: 220.00, image_url: null, created_by_admin: true },
+  { id: 'cat-01', name: 'Paracetamol 500mg',   salt_name: 'Paracetamol',            mrp:  25.00, image_url: null, created_by_admin: true, manufacturer: 'Cipla Ltd',         category: 'Drugs', requires_prescription: false },
+  { id: 'cat-02', name: 'Amoxicillin 250mg',   salt_name: 'Amoxicillin Trihydrate', mrp:  85.00, image_url: null, created_by_admin: true, manufacturer: 'Sun Pharma',        category: 'Drugs', requires_prescription: true },
+  { id: 'cat-03', name: 'Azithromycin 500mg',  salt_name: 'Azithromycin',           mrp: 140.00, image_url: null, created_by_admin: true, manufacturer: 'Alkem Labs',        category: 'Drugs', requires_prescription: true },
+  { id: 'cat-04', name: 'Metformin 500mg',     salt_name: 'Metformin HCl',          mrp:  35.00, image_url: null, created_by_admin: true, manufacturer: 'USV Pvt Ltd',       category: 'Drugs', requires_prescription: true },
+  { id: 'cat-05', name: 'Atorvastatin 10mg',   salt_name: 'Atorvastatin',           mrp: 120.00, image_url: null, created_by_admin: true, manufacturer: 'Lupin Ltd',         category: 'Drugs', requires_prescription: true },
+  { id: 'cat-06', name: 'Omeprazole 20mg',     salt_name: 'Omeprazole',             mrp:  45.00, image_url: null, created_by_admin: true, manufacturer: 'Dr. Reddy\'s',      category: 'Drugs', requires_prescription: false },
+  { id: 'cat-07', name: 'Cetirizine 10mg',     salt_name: 'Cetirizine HCl',         mrp:  30.00, image_url: null, created_by_admin: true, manufacturer: 'GlaxoSmithKline',   category: 'OTC',   requires_prescription: false },
+  { id: 'cat-08', name: 'Ibuprofen 400mg',     salt_name: 'Ibuprofen',              mrp:  55.00, image_url: null, created_by_admin: true, manufacturer: 'Abbott India',      category: 'Drugs', requires_prescription: false },
+  { id: 'cat-09', name: 'Pantoprazole 40mg',   salt_name: 'Pantoprazole',           mrp:  65.00, image_url: null, created_by_admin: true, manufacturer: 'Zydus Cadila',      category: 'Drugs', requires_prescription: true },
+  { id: 'cat-10', name: 'Dolo 650mg',          salt_name: 'Paracetamol',            mrp:  30.00, image_url: null, created_by_admin: true, manufacturer: 'Micro Labs',        category: 'OTC',   requires_prescription: false },
+  { id: 'cat-11', name: 'Vitamin D3 60000IU',  salt_name: 'Cholecalciferol',        mrp: 180.00, image_url: null, created_by_admin: true, manufacturer: 'Mankind Pharma',    category: 'OTC',   requires_prescription: false },
+  { id: 'cat-12', name: 'Multivitamin Tablets',salt_name: 'Vitamins & Minerals',    mrp: 220.00, image_url: null, created_by_admin: true, manufacturer: 'HealthAid India',   category: 'OTC',   requires_prescription: false },
 ]
 
 /* ── Inventory ───────────────────────────────────────────────────── */
@@ -105,6 +111,9 @@ export const DEMO_INVENTORY: DemoMergedInventoryItem[] = DEMO_CATALOG.map((c, i)
   stock_qty:    [50, 30, 20, 100, 45, 60, 80, 35, 25, 90, 15, 40][i],
   // cat-04 (Metformin) and cat-11 (Vit D3) shown as unavailable for demo variety
   is_available: i !== 3 && i !== 10,
+  manufacturer: c.manufacturer ?? '',
+  category:     c.category ?? '',
+  requires_prescription: c.requires_prescription ?? false,
 }))
 
 /* ── Helpers ─────────────────────────────────────────────────────── */

@@ -146,6 +146,15 @@ export default function OnboardingPage() {
                 </p>
               ))}
             </div>
+            {/* Not a dead end: a pending pharmacy can still sign in, watch where
+                its application stands and correct any detail under review. */}
+            <button
+              type="button"
+              onClick={() => router.push('/vendor/profile')}
+              className="inline-flex items-center justify-center w-full py-3 rounded-xl bg-[#21A053] text-sm font-semibold text-white hover:bg-[#1c8c47] transition-colors"
+            >
+              Go to my pharmacy profile
+            </button>
             <a
               href="mailto:support@kapzo.in"
               className="inline-flex items-center justify-center w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-[#022135] hover:bg-slate-50 transition-colors"

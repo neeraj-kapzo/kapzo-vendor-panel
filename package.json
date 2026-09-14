@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
+    "build": "next build && node scripts/fix-segment-files.mjs out",
     "start": "next start -p 3001",
     "lint": "eslint"
   },
@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/google.maps": "^3.66.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

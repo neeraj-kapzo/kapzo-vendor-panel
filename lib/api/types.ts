@@ -28,19 +28,50 @@ export interface BackendUser {
   status: 'ACTIVE' | 'BANNED'
 }
 
+/**
+ * `GET`/`PATCH /vendors/me`. The Vendor row plus the four things the backend
+ * joins on for the profile page: the owner's name and email (they live on the
+ * User row) and signed read URLs for the two documents (the `*FileKey` fields
+ * are GCS object keys, not links).
+ */
 export interface BackendVendor {
   id: string
   userId: string
   pharmacyName: string
   licenseNumber: string
-  licenseFileKey: string
+  /**
+   * Null for a vendor the admin bulk-imported from a CSV: the licence number
+   * is on record but the scan is still to be attached, which is also why such
+   * a vendor is PENDING rather than active.
+   */
+  licenseFileKey: string | null
   contactPhone: string
   addressLine: string
-  lat: number
-  lng: number
+  /**
+   * The pharmacy's map pin. Null until someone drops a marker — it is never
+   * derived from `addressLine`, and Kapzo cannot approve the pharmacy without
+   * it, because riders are routed to this point.
+   */
+  lat: number | null
+  lng: number | null
   verificationStatus: BackendVerificationStatus
   isOnline: boolean
   commissionPercent: string | number
+  altPhone: string | null
+  bankAccountHolder: string | null
+  bankName: string | null
+  bankAccountNumber: string | null
+  bankIfsc: string | null
+  /** Short English day labels in calendar order, e.g. ["Mon","Tue"]. */
+  workingDays: string[]
+  /** "HH:mm", 24-hour. */
+  workingHoursStart: string | null
+  workingHoursEnd: string | null
+  fssaiFileKey: string | null
+  contactPerson: string | null
+  email: string | null
+  licenseUrl: string | null
+  fssaiUrl: string | null
 }
 
 export interface BackendOrderItem {

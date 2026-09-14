@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DashboardClient } from './DashboardClient'
 import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
 import { fetchDashboardStats, type DashboardStats } from '@/lib/api'
@@ -17,6 +17,9 @@ export default function DashboardPage() {
   const { vendor, loading: vendorLoading } = useRequireVendor()
   const [data, setData] = useState<InitialData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // "Latest request wins" — see the identical comment in inventory/page.tsx
+  // for why this isn't a one-shot "already started" guard.
+  const fetchIdRef = useRef(0)
 
   // Demo data must be referentially stable across renders — fresh arrays every
   // render would re-trigger the client's store-seeding effect forever.
@@ -27,17 +30,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isDemoMode || !vendor) return
-    let cancelled = false
+    const fetchId = ++fetchIdRef.current
     fetchDashboardStats(vendor.id)
       .then(({ activeOrders, ...stats }) => {
-        if (!cancelled) setData({ stats, orders: activeOrders })
+        if (fetchIdRef.current === fetchId) setData({ stats, orders: activeOrders })
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message)
+        if (fetchIdRef.current === fetchId) setError(err.message)
       })
-    return () => {
-      cancelled = true
-    }
   }, [vendor])
 
   /* ── Demo mode — bypass the backend entirely ── */

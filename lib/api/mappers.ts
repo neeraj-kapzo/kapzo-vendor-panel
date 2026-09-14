@@ -23,29 +23,31 @@ export function mapVendorStatus(status: BackendVerificationStatus): VendorStatus
 }
 
 /**
- * Backend Vendor → UI Vendor. Fields the backend doesn't model (bank details,
- * working hours, FSSAI) map to null; the UI already renders null as "not set".
- * `email` isn't on the Vendor row — pass it from the Firebase user.
+ * Backend Vendor → UI Vendor. `/vendors/me` carries the owner's name/email and
+ * signed document URLs alongside the Vendor row, so everything the profile
+ * page renders comes from one call. `fallbackEmail` (the Firebase user's
+ * email) only fills in when the backend has none on the User row.
  */
-export function mapVendor(v: BackendVendor, email?: string | null): Vendor {
+export function mapVendor(v: BackendVendor, fallbackEmail?: string | null): Vendor {
   return {
     id: v.id,
     user_id: v.userId,
     pharmacy_name: v.pharmacyName,
-    email: email ?? '',
+    email: v.email ?? fallbackEmail ?? '',
     phone: v.contactPhone,
-    alt_phone: null,
-    license_url: null,
-    fssai_url: null,
-    contact_person: '',
+    alt_phone: v.altPhone,
+    license_url: v.licenseUrl,
+    fssai_url: v.fssaiUrl,
+    license_number: v.licenseNumber,
+    contact_person: v.contactPerson ?? '',
     address: v.addressLine,
-    bank_account_holder: null,
-    bank_name: null,
-    bank_account_number: null,
-    bank_ifsc: null,
-    working_hours_start: null,
-    working_hours_end: null,
-    working_days: null,
+    bank_account_holder: v.bankAccountHolder,
+    bank_name: v.bankName,
+    bank_account_number: v.bankAccountNumber,
+    bank_ifsc: v.bankIfsc,
+    working_hours_start: v.workingHoursStart,
+    working_hours_end: v.workingHoursEnd,
+    working_days: v.workingDays,
     status: mapVendorStatus(v.verificationStatus),
     is_online: v.isOnline,
     created_at: '',
