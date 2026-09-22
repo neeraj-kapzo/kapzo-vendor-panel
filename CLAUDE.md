@@ -98,10 +98,21 @@ server auto-joins the vendor room. Events:
   flash + toast, then refetch the pending list
 - `order-status` `{orderId, status, isSimulated}` — silent store sync (covers the server's
   120 s auto-reject too)
-- `simulation-reset` `{vendorId}` — clears simulated orders from store, refetches History and Settlements
+- `simulation-reset` `{vendorId}` — admin wiped this vendor's simulated orders.
+  One listener, mounted by the vendor shell (`app/vendor/layout.tsx` →
+  `useSimulationResetListener` in `lib/hooks/useSimulationReset.ts`), drops
+  simulated orders from the store, dispatches the `SIMULATION_RESET_EVENT`
+  window event (`'kapzo:simulation-reset'`) and toasts "Simulated orders were
+  cleared by Kapzo". Pages react via `useOnSimulationReset`: Orders and
+  Dashboard drop simulated rows/alerts from their local state (Dashboard also
+  refreshes its stats, `useOrders` refetches), History and Settlements refetch
 
-`lib/hooks/useRealtimeOrders.tsx` is the primary hook; `useOrders.ts` is the
-legacy refetch-on-any-event fallback used by OrdersClient.
+The `new-order` / `order-status` listeners live in the pages themselves:
+`DashboardClient` (beep + tab flash + `NewOrderToast`), `OrdersClient` (local
+active/closed lists + the pending timer card) and `useOrders.ts` (store
+refetch on any event, used by the Dashboard). `lib/hooks/useRealtimeOrders.tsx`
+is currently not mounted anywhere — don't mount it alongside the pages, its
+`new-order` beep/toast would duplicate the Dashboard's.
 
 ### Order state machine (backend-enforced)
 
@@ -166,7 +177,9 @@ shop. Consequences worth knowing:
 ### Known phase-1 gaps (backend has no endpoint yet)
 
 - Settlements ledger — payouts are offline; the page shows earnings from
-  `/vendor/stats` with a breakdown per order and a separate "Simulated earnings (not paid out)" card for training orders
+  `/vendor/stats` as a last-30-days payout breakdown (gross sales, commission,
+  earnings; per-order amounts live on History) and a separate "Simulated
+  earnings (not paid out)" card for training orders
 - History custom date ranges beyond the backend's 30-day window
 - `registerVendor()` in `lib/api/index.ts` still posts to `/vendors/register`,
   which the backend removed when vendor self-signup was dropped — dead code,
