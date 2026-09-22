@@ -94,10 +94,11 @@ status PENDING until admin approval).
 backend; the handshake carries the Firebase token in `auth.token` and the
 server auto-joins the vendor room. Events:
 
-- `new-order` `{orderId, orderNumber, expiresAt, total}` — beep + tab-title
+- `new-order` `{orderId, orderNumber, expiresAt, total, isSimulated}` — beep + tab-title
   flash + toast, then refetch the pending list
-- `order-status` `{orderId, status}` — silent store sync (covers the server's
+- `order-status` `{orderId, status, isSimulated}` — silent store sync (covers the server's
   120 s auto-reject too)
+- `simulation-reset` `{vendorId}` — clears simulated orders from store, refetches History and Settlements
 
 `lib/hooks/useRealtimeOrders.tsx` is the primary hook; `useOrders.ts` is the
 legacy refetch-on-any-event fallback used by OrdersClient.
@@ -165,7 +166,7 @@ shop. Consequences worth knowing:
 ### Known phase-1 gaps (backend has no endpoint yet)
 
 - Settlements ledger — payouts are offline; the page shows earnings from
-  `/vendor/stats` and an empty transaction list
+  `/vendor/stats` with a breakdown per order and a separate "Simulated earnings (not paid out)" card for training orders
 - History custom date ranges beyond the backend's 30-day window
 - `registerVendor()` in `lib/api/index.ts` still posts to `/vendors/register`,
   which the backend removed when vendor self-signup was dropped — dead code,
