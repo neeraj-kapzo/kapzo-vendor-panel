@@ -14,6 +14,7 @@ interface VendorStore {
   addPendingOrder: (order: Order) => void
   clearPendingOrder: (orderId: string) => void
   updateOrderStatus: (orderId: string, status: OrderStatus, updatedAt?: string) => void
+  removeSimulatedOrders: () => void
 }
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'packing', 'packed', 'dispatched']
@@ -74,6 +75,16 @@ export const useVendorStore = create<VendorStore>((set) => ({
       return {
         activeOrders,
         pendingOrders,
+        unreadOrderCount: pendingOrders.length,
+      }
+    }),
+
+  removeSimulatedOrders: () =>
+    set((state) => {
+      const pendingOrders = state.pendingOrders.filter((o) => !o.is_simulated)
+      return {
+        pendingOrders,
+        activeOrders: state.activeOrders.filter((o) => !o.is_simulated),
         unreadOrderCount: pendingOrders.length,
       }
     }),

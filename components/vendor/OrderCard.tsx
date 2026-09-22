@@ -5,6 +5,7 @@ import { Clock, MapPin, Package, FileText, ChevronDown, ChevronUp } from 'lucide
 import { Card, CardContent, CardFooter } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { OrderStatusBadge } from '@/components/ui/Badge'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import {
@@ -93,6 +94,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
                 #{order.id.slice(-6).toUpperCase()}
               </span>
               <OrderStatusBadge status={order.status} />
+              {order.is_simulated && <SimulatedBadge />}
               {order.prescription_verified && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#21A053] bg-[#21A053]/8 px-2 py-0.5 rounded-[999px]">
                   <FileText size={10} /> Rx Verified

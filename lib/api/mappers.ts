@@ -103,6 +103,7 @@ export function mapVendorOrder(o: BackendVendorOrder, vendorId: string): OrderWi
     commission_amount: Number(o.commissionAmount),
     expires_at: o.expiresAt,
     seconds_left: o.secondsLeft ?? null,
+    is_simulated: o.isSimulated ?? false,
     order_items,
   }
 }

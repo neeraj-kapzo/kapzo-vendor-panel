@@ -1,5 +1,6 @@
 import { Clock, Package, FileText } from 'lucide-react'
 import { cn, formatCurrency, timeAgo } from '@/lib/utils'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import type { Order, OrderStatus } from '@/types/database.types'
 
 interface OrderFeedCardProps {
@@ -37,6 +38,7 @@ export function OrderFeedCard({ order }: OrderFeedCardProps) {
           <span className="text-sm font-bold text-[#022135]">
             #{order.id.slice(-6).toUpperCase()}
           </span>
+          {order.is_simulated && <SimulatedBadge />}
           <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold', s.bg, s.text)}>
             {s.label}
           </span>

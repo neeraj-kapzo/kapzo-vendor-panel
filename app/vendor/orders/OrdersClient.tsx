@@ -8,6 +8,7 @@ import {
 import { Modal } from '@/components/ui/Modal'
 import { OrderStatusBadge } from '@/components/ui/Badge'
 import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import {
   acceptOrder,
   fetchActiveOrders,
@@ -196,6 +197,7 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
             <span className="text-lg font-bold text-[#022135]">
               #{order.id.slice(-6).toUpperCase()}
             </span>
+            {order.is_simulated && <SimulatedBadge />}
             {order.prescription_verified && (
               order.prescription_url ? (
                 <button
@@ -368,8 +370,9 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
           <div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Order Details</p>
-            <h2 className="text-xl font-bold text-[#022135] mt-0.5">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[#022135] mt-0.5">
               #{order.id.slice(-6).toUpperCase()}
+              {order.is_simulated && <SimulatedBadge />}
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -643,6 +646,7 @@ function OrderRow({
       <span className="font-mono text-sm font-bold text-[#022135] shrink-0 w-20">
         #{order.id.slice(-6).toUpperCase()}
       </span>
+      {order.is_simulated && <SimulatedBadge />}
 
       {/* Middle info */}
       <div className="flex-1 min-w-0">

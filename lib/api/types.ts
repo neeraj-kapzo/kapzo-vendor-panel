@@ -101,6 +101,8 @@ export interface BackendVendorOrder {
   items: BackendOrderItem[]
   customerName?: string | null
   secondsLeft?: number | null
+  /** Admin-simulated order (training). Real alert + state machine; never paid out. */
+  isSimulated?: boolean
 }
 
 export interface BackendVendorOrderPage {
@@ -108,21 +110,35 @@ export interface BackendVendorOrderPage {
   total: number
 }
 
-export interface BackendVendorStats {
+export interface BackendVendorStatsTotals {
   deliveredCount: number
   grossSales: number
   commission: number
   earnings: number
 }
 
+/** Top-level totals are real orders only; `simulated` is the same maths over simulated orders. */
+export interface BackendVendorStats extends BackendVendorStatsTotals {
+  simulated?: BackendVendorStatsTotals
+}
+
 export interface BackendOrderHistoryRow {
   id: string
   orderNumber: string
   status: BackendOrderStatus
+  customerName?: string | null
+  isSimulated?: boolean
+  items?: { name: string; price: number; quantity: number }[]
   subtotal: number
+  deliveryFee?: number
+  platformFee?: number
   total: number
+  commissionPercent?: number
+  commission?: number
   earning: number
+  rejectionReason?: string | null
   createdAt: string
+  deliveredAt?: string | null
 }
 
 export interface BackendOrderHistoryPage {
@@ -180,9 +196,15 @@ export interface NewOrderEvent {
   orderNumber: string
   expiresAt: string | null
   total: string | number
+  isSimulated?: boolean
 }
 
 export interface OrderStatusEvent {
   orderId: string
   status: BackendOrderStatus
+  isSimulated?: boolean
+}
+
+export interface SimulationResetEvent {
+  vendorId: string
 }

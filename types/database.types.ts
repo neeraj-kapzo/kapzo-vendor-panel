@@ -98,6 +98,8 @@ export interface Order {
   expires_at?: string | null
   /** Seconds remaining at fetch time, computed on the server clock. */
   seconds_left?: number | null
+  /** Admin-simulated order — shown with a "Simulated" badge, never paid out. */
+  is_simulated?: boolean
 }
 
 export interface OrderItem {

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { formatCurrency, timeAgo } from '@/lib/utils'
 import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import type { Order } from '@/types/database.types'
 
 interface NewOrderAlert {
@@ -77,8 +78,9 @@ function NewOrderToastItem({
                 <X size={13} />
               </button>
             </div>
-            <p className="text-sm font-semibold text-[#022135] mt-0.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#022135] mt-0.5">
               #{alert.order.id.slice(-6).toUpperCase()}
+              {alert.order.is_simulated && <SimulatedBadge />}
             </p>
             <div className="flex items-center justify-between mt-1">
               <span className="text-xs text-slate-400">{timeAgo(alert.order.created_at)}</span>
