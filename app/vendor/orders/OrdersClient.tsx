@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import {
   ShoppingBag, Clock, X, AlertTriangle, Package,
   FileText, CheckCircle2, ChevronRight, Loader2, FlaskConical,
@@ -21,6 +21,7 @@ import {
   type OrderStatusEvent,
 } from '@/lib/api'
 import { getSocket } from '@/lib/realtime'
+import { useOnSimulationReset } from '@/lib/hooks/useSimulationReset'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
 import { cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
@@ -829,6 +830,15 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId])
+
+  /* ── Admin wiped the simulated orders (event dispatched by the vendor shell) ── */
+  const dropSimulatedOrders = useCallback(() => {
+    setActiveOrders((prev) => prev.filter((o) => !o.is_simulated))
+    setClosedOrders((prev) => prev.filter((o) => !o.is_simulated))
+    setSelectedOrder((prev) => (prev?.is_simulated ? null : prev))
+    setRejectTarget((prev) => (prev?.is_simulated ? null : prev))
+  }, [])
+  useOnSimulationReset(dropSimulatedOrders)
 
   /* ── Open detail (demo: already has items; real: fetch if needed) ── */
   async function openDetail(orderId: string) {

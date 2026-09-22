@@ -19,7 +19,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { OrderStatus } from '@/types/database.types'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
-import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useRealtimeOrders'
+import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useSimulationReset'
 
 /* ─── Types ─── */
 type DatePreset = 'today' | 'week' | 'month' | 'custom'

@@ -10,6 +10,7 @@ import { useVendorStore } from '@/lib/store/vendorStore'
 import { useOrders } from '@/lib/hooks/useOrders'
 import { fetchDashboardStats, fetchActiveOrders, type NewOrderEvent } from '@/lib/api'
 import { getSocket } from '@/lib/realtime'
+import { useOnSimulationReset } from '@/lib/hooks/useSimulationReset'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
 import Link from 'next/link'
@@ -146,6 +147,14 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
       if (titleInterval) clearInterval(titleInterval)
     }
   }, [vendor.id])
+
+  /* ── Admin wiped the simulated orders: drop their alerts, refresh counts.
+       The shell already removed them from the store (useOrders refetches). ── */
+  const onSimulationReset = useCallback(() => {
+    setAlerts((prev) => prev.filter((a) => !a.order.is_simulated))
+    void refreshStats()
+  }, [refreshStats])
+  useOnSimulationReset(onSimulationReset)
 
   function dismissAlert(id: string) {
     setAlerts((prev) => prev.filter((a) => a.id !== id))

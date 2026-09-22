@@ -13,6 +13,7 @@ import { VendorHeader } from '@/components/vendor/VendorHeader'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
+import { useSimulationResetListener } from '@/lib/hooks/useSimulationReset'
 import { getFirebaseAuth } from '@/lib/firebase'
 import { disconnectSocket } from '@/lib/realtime'
 import { isDemoMode } from '@/lib/demo'
@@ -49,11 +50,15 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
   const { unreadOrderCount: pendingOrderCount } = useVendorStore()
 
   const isPending = vendor?.status === 'pending'
+  const inShell = !SHELL_EXCLUDED.some((p) => pathname.startsWith(p))
+
+  /* One shell-level listener for admin simulation resets (see useSimulationReset) */
+  useSimulationResetListener(!isDemoMode && inShell && vendor?.status === 'active')
   const visibleNav = isPending
     ? navItems.filter((item) => PENDING_NAV_HREFS.has(item.href))
     : navItems
 
-  if (SHELL_EXCLUDED.some((p) => pathname.startsWith(p))) return <>{children}</>
+  if (!inShell) return <>{children}</>
 
   async function handleLogout() {
     if (isDemoMode) {

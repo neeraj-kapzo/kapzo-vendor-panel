@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SettlementsClient } from './SettlementsClient'
 import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
 import { fetchVendorStats, type BackendVendorStats } from '@/lib/api'
-import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useRealtimeOrders'
+import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useSimulationReset'
 import { Skeleton } from '@/components/ui/Skeleton'
 import {
   isDemoMode, DEMO_VENDOR_ID, DEMO_SETTLEMENTS,

@@ -47,20 +47,15 @@ function flashTitle(intervalRef: React.MutableRefObject<ReturnType<typeof setInt
   }, 8000)
 }
 
-/** Window event pages listen to so they refetch money/history after a simulation reset. */
-export const SIMULATION_RESET_EVENT = 'kapzo:simulation-reset'
-
 /**
  * Live vendor order feed over the backend's Socket.IO gateway. The server
  * auto-joins this connection to `vendor:{vendorId}` after verifying the
  * Firebase token, so no explicit subscribe call is needed:
  *  - `new-order`    → alert UX (beep, tab flash, toast) + fetch the full row
  *  - `order-status` → silent store sync (covers auto-reject, rider updates…)
- *  - `simulation-reset` → drop simulated orders from the store, notify pages to refetch
  */
 export function useRealtimeOrders(vendorId: string | undefined) {
-  const { addPendingOrder, updateOrderStatus, setActiveOrders, removeSimulatedOrders } =
-    useVendorStore()
+  const { addPendingOrder, updateOrderStatus, setActiveOrders } = useVendorStore()
   const flashIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   /* ── Initial fetch ── */
@@ -93,9 +88,7 @@ export function useRealtimeOrders(vendorId: string | undefined) {
           >
             <span className="text-xl">🛒</span>
             <div>
-              <p className="font-semibold text-[#022135] text-sm">
-                {order.is_simulated ? 'New Order! (Simulated)' : 'New Order!'}
-              </p>
+              <p className="font-semibold text-[#022135] text-sm">New Order!</p>
               <p className="text-xs text-gray-500">₹{order.total_amount} · Accept within 2 min</p>
             </div>
           </div>
@@ -108,24 +101,16 @@ export function useRealtimeOrders(vendorId: string | undefined) {
       updateOrderStatus(event.orderId, mapOrderStatus(event.status))
     }
 
-    const onSimulationReset = () => {
-      removeSimulatedOrders()
-      window.dispatchEvent(new Event(SIMULATION_RESET_EVENT))
-      toast('Simulated orders were cleared by Kapzo', { icon: '🧪' })
-    }
-
     socket.on('new-order', onNewOrder)
     socket.on('order-status', onOrderStatus)
-    socket.on('simulation-reset', onSimulationReset)
 
     return () => {
       socket.off('new-order', onNewOrder)
       socket.off('order-status', onOrderStatus)
-      socket.off('simulation-reset', onSimulationReset)
       if (flashIntervalRef.current) {
         clearInterval(flashIntervalRef.current)
         flashIntervalRef.current = null
       }
     }
-  }, [vendorId, addPendingOrder, updateOrderStatus, removeSimulatedOrders])
+  }, [vendorId, addPendingOrder, updateOrderStatus])
 }
