@@ -8,8 +8,10 @@ import {
   CalendarDays, Hash, FileText, TrendingUp,
 } from 'lucide-react'
 import { StatsCard } from '@/components/vendor/StatsCard'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import { cn, formatCurrency } from '@/lib/utils'
 import { isDemoMode, type DemoSettlement } from '@/lib/demo'
+import type { BackendVendorStats } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 /* ─── Types ─── */
@@ -337,6 +339,7 @@ interface SettlementsClientProps {
   completedCount:   number
   failedCount:      number
   lastStatus:       SettlementStatus
+  earnings?:        BackendVendorStats
 }
 
 export function SettlementsClient({
@@ -347,6 +350,7 @@ export function SettlementsClient({
   completedCount,
   failedCount,
   lastStatus,
+  earnings,
 }: SettlementsClientProps) {
   const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements)
   const [currentPending, setCurrentPending] = useState(pendingAmount)
@@ -456,7 +460,7 @@ export function SettlementsClient({
         <StatsCard
           title="Pending Amount"
           value={formatCurrency(currentPending)}
-          subtitle="Awaiting payout"
+          subtitle="Awaiting payout · last 30 days"
           icon={Clock}
           accentColor="amber"
         />
@@ -475,6 +479,33 @@ export function SettlementsClient({
           accentColor={lastStatus === 'failed' ? 'amber' : lastStatus === 'completed' ? 'green' : 'purple'}
         />
       </div>
+
+      {earnings && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Last 30 days · delivered orders</p>
+            <dl className="mt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between"><dt className="text-slate-500">Gross sales ({earnings.deliveredCount} orders)</dt><dd className="tabular-nums text-[#022135]">{formatCurrency(earnings.grossSales)}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Kapzo commission</dt><dd className="tabular-nums text-slate-500">− {formatCurrency(earnings.commission)}</dd></div>
+              <div className="flex justify-between border-t border-slate-100 pt-1.5 font-bold"><dt className="text-[#022135]">Pending payout</dt><dd className="tabular-nums text-[#21A053]">{formatCurrency(earnings.earnings)}</dd></div>
+            </dl>
+          </div>
+          {earnings.simulated && earnings.simulated.deliveredCount > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 px-5 py-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-widest">Simulated earnings (not paid out)</p>
+                <SimulatedBadge />
+              </div>
+              <dl className="mt-3 space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-amber-800/80">Gross sales ({earnings.simulated.deliveredCount} orders)</dt><dd className="tabular-nums">{formatCurrency(earnings.simulated.grossSales)}</dd></div>
+                <div className="flex justify-between"><dt className="text-amber-800/80">Kapzo commission</dt><dd className="tabular-nums">− {formatCurrency(earnings.simulated.commission)}</dd></div>
+                <div className="flex justify-between border-t border-amber-200 pt-1.5 font-bold"><dt>Simulated earnings</dt><dd className="tabular-nums">{formatCurrency(earnings.simulated.earnings)}</dd></div>
+              </dl>
+              <p className="mt-2 text-[11px] text-amber-700">Training orders created by Kapzo. They are excluded from your payout and disappear when Kapzo resets them.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Transaction History */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
