@@ -18,6 +18,8 @@ import { isDemoMode, getDemoHistoryOrders } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { OrderStatus } from '@/types/database.types'
+import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
+import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useRealtimeOrders'
 
 /* ─── Types ─── */
 type DatePreset = 'today' | 'week' | 'month' | 'custom'
@@ -30,8 +32,17 @@ type HistoryOrderItem = {
 
 type HistoryOrder = {
   id:                   string
+  order_number:         string | null
+  customer_name:        string | null
+  is_simulated:         boolean
   status:               OrderStatus
+  subtotal:             number
+  delivery_fee:         number
+  platform_fee:         number
   total_amount:         number
+  commission_percent:   number
+  commission:           number
+  earning:              number
   created_at:           string
   updated_at:           string
   rejection_reason:     string | null
@@ -39,7 +50,7 @@ type HistoryOrder = {
   order_items:          HistoryOrderItem[]
 }
 
-type Summary = { orders: number; revenue: number }
+type Summary = { orders: number; revenue: number; simulatedOrders: number; simulatedEarnings: number }
 
 /* ─── Constants ─── */
 const PAGE_SIZE = 20
@@ -107,16 +118,34 @@ function backendRange(preset: DatePreset): StatsRange {
 }
 
 function mapHistoryRow(row: BackendOrderHistoryRow): HistoryOrder {
+  const closedAt = row.deliveredAt ?? row.createdAt
   return {
     id: row.id,
+    order_number: row.orderNumber ?? null,
+    customer_name: row.customerName ?? null,
+    is_simulated: row.isSimulated ?? false,
     status: mapOrderStatus(row.status),
+    subtotal: row.subtotal,
+    delivery_fee: row.deliveryFee ?? 0,
+    platform_fee: row.platformFee ?? 0,
     total_amount: row.total,
+    commission_percent: row.commissionPercent ?? 0,
+    commission: row.commission ?? 0,
+    earning: row.earning,
     created_at: row.createdAt,
-    updated_at: row.createdAt,
-    rejection_reason: null,
+    updated_at: closedAt,
+    rejection_reason: row.rejectionReason ?? null,
     prescription_verified: false,
-    order_items: [],
+    order_items: (row.items ?? []).map((i) => ({
+      quantity: i.quantity,
+      unit_price: i.price,
+      catalog_item: { name: i.name },
+    })),
   }
+}
+
+function displayId(o: HistoryOrder): string {
+  return o.order_number ?? `#${o.id.slice(-8).toUpperCase()}`
 }
 
 function getPageNums(current: number, total: number): (number | '…')[] {
@@ -198,6 +227,15 @@ function SummaryCard({
   )
 }
 
+function MoneyRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
+  return (
+    <tr className={cn('border-t border-slate-100', strong ? 'bg-[#21A053]/5' : 'bg-slate-50')}>
+      <td colSpan={3} className={cn('px-3 py-2', muted ? 'text-slate-400' : 'font-semibold text-slate-500')}>{label}</td>
+      <td className={cn('px-3 py-2 text-right tabular-nums', strong ? 'text-sm font-bold text-[#21A053]' : 'font-semibold text-[#022135]')}>{value}</td>
+    </tr>
+  )
+}
+
 /* ═══════════════════════════════════════════════════════════
    Order detail slide-over
 ═══════════════════════════════════════════════════════════ */
@@ -233,7 +271,7 @@ function DetailPanel({ order, onClose }: { order: HistoryOrder; onClose: () => v
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Order Details</p>
             <div className="flex items-center gap-2 mt-0.5">
               <h2 className="font-mono text-xl font-bold text-[#00326F]">
-                #{order.id.slice(-8).toUpperCase()}
+                {displayId(order)}
               </h2>
               <button
                 onClick={copyId}
@@ -245,6 +283,7 @@ function DetailPanel({ order, onClose }: { order: HistoryOrder; onClose: () => v
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {order.is_simulated && <SimulatedBadge />}
             <span className={cn(
               'px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize',
               STATUS_STYLES[order.status] ?? 'bg-slate-100 text-slate-500'
@@ -271,7 +310,7 @@ function DetailPanel({ order, onClose }: { order: HistoryOrder; onClose: () => v
             </p>
             <p className="flex items-center gap-2 text-xs text-slate-400">
               <Package size={13} />
-              Customer Zone: Area info not available
+              Customer: {order.customer_name ?? '—'}
             </p>
             {order.prescription_verified && (
               <span className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-[#21A053] bg-[#21A053]/10 px-2.5 py-0.5 rounded-full">
@@ -294,7 +333,11 @@ function DetailPanel({ order, onClose }: { order: HistoryOrder; onClose: () => v
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {order.order_items.map((item, idx) => (
+                  {order.order_items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-xs text-slate-400 px-3 py-2.5">No line items recorded</td>
+                    </tr>
+                  ) : order.order_items.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="px-3 py-2.5 text-xs font-medium text-[#022135]">
                         {item.catalog_item.name}
@@ -307,13 +350,21 @@ function DetailPanel({ order, onClose }: { order: HistoryOrder; onClose: () => v
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t border-slate-100">
-                    <td colSpan={3} className="px-3 py-2.5 text-xs font-semibold text-slate-500">Order Total</td>
-                    <td className="px-3 py-2.5 text-right text-sm font-bold text-[#022135] tabular-nums">
-                      {formatCurrency(order.total_amount)}
-                    </td>
-                  </tr>
+                <tfoot className="text-xs">
+                  <MoneyRow label="Items subtotal" value={formatCurrency(order.subtotal ?? order.total_amount)} />
+                  <MoneyRow label="Delivery fee (paid by customer, kept by Kapzo)" value={formatCurrency(order.delivery_fee ?? 0)} muted />
+                  <MoneyRow label="Platform fee (paid by customer, kept by Kapzo)" value={formatCurrency(order.platform_fee ?? 0)} muted />
+                  <MoneyRow label="Customer paid" value={formatCurrency(order.total_amount)} />
+                  <MoneyRow
+                    label={`Kapzo commission (${(order.commission_percent ?? 0).toFixed(2)}%)`}
+                    value={order.status === 'delivered' ? `− ${formatCurrency(order.commission ?? 0)}` : '—'}
+                    muted
+                  />
+                  <MoneyRow
+                    label={order.is_simulated ? 'Your earning (simulated — not paid out)' : 'Your earning'}
+                    value={formatCurrency(order.status === 'delivered' ? (order.earning ?? 0) : 0)}
+                    strong
+                  />
                 </tfoot>
               </table>
             </div>
@@ -433,7 +484,7 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
   const [page,       setPage]       = useState(1)
   const [orders,     setOrders]     = useState<HistoryOrder[]>([])
   const [total,      setTotal]      = useState(0)
-  const [summary,    setSummary]    = useState<Summary>({ orders: 0, revenue: 0 })
+  const [summary,    setSummary]    = useState<Summary>({ orders: 0, revenue: 0, simulatedOrders: 0, simulatedEarnings: 0 })
   const [loading,    setLoading]    = useState(true)
   const [exporting,  setExporting]  = useState(false)
   const [selected,   setSelected]   = useState<HistoryOrder | null>(null)
@@ -457,6 +508,8 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
       setSummary({
         orders:  delivered.length,
         revenue: delivered.reduce((s, o) => s + o.total_amount, 0),
+        simulatedOrders: 0,
+        simulatedEarnings: 0,
       })
       setLoading(false)
       return
@@ -471,16 +524,25 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
 
       let rows = historyPage.items.map(mapHistoryRow)
       let count = historyPage.total
-      let deliveredSummary: Summary = { orders: stats.deliveredCount, revenue: stats.grossSales }
+      let deliveredSummary: Summary = {
+        orders: stats.deliveredCount,
+        revenue: stats.earnings,
+        simulatedOrders: stats.simulated?.deliveredCount ?? 0,
+        simulatedEarnings: stats.simulated?.earnings ?? 0,
+      }
 
       if (preset === 'custom') {
         // Client-side narrowing of the 30-day window (see backendRange doc)
         rows = rows.filter((o) => o.created_at >= from && o.created_at <= to)
         count = rows.length
         const delivered = rows.filter((o) => o.status === 'delivered')
+        const real = delivered.filter((o) => !o.is_simulated)
+        const sim = delivered.filter((o) => o.is_simulated)
         deliveredSummary = {
-          orders: delivered.length,
-          revenue: delivered.reduce((s, o) => s + o.total_amount, 0),
+          orders: real.length,
+          revenue: real.reduce((s, o) => s + o.earning, 0),
+          simulatedOrders: sim.length,
+          simulatedEarnings: sim.reduce((s, o) => s + o.earning, 0),
         }
       }
 
@@ -490,13 +552,19 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
     } catch {
       setOrders([])
       setTotal(0)
-      setSummary({ orders: 0, revenue: 0 })
+      setSummary({ orders: 0, revenue: 0, simulatedOrders: 0, simulatedEarnings: 0 })
     }
     setLoading(false)
   }, [preset, customFrom, customTo, page, vendorId])
 
   useEffect(() => {
     fetchData()
+  }, [fetchData])
+
+  useEffect(() => {
+    const onReset = () => { void fetchData() }
+    window.addEventListener(SIMULATION_RESET_EVENT, onReset)
+    return () => window.removeEventListener(SIMULATION_RESET_EVENT, onReset)
   }, [fetchData])
 
   /* Reset page on filter change */
@@ -558,15 +626,19 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
 
       if (data.length > 0) {
         const rows = data.map((o) => [
-          o.id,
+          o.order_number ?? o.id,
           format(new Date(o.updated_at), 'd MMM yyyy, h:mm a'),
-          '\u2014', // item lines aren't part of the history endpoint
-          o.total_amount.toFixed(2),
+          o.order_items.map((i) => `${i.catalog_item.name} x${i.quantity}`).join('; ') || '\u2014',
+          (o.subtotal ?? 0).toFixed(2),
+          (o.total_amount).toFixed(2),
+          (o.commission ?? 0).toFixed(2),
+          (o.earning ?? 0).toFixed(2),
           o.status,
+          o.is_simulated ? 'yes' : 'no',
           o.rejection_reason ?? '',
         ])
 
-        const header = ['Order ID', 'Date', 'Items', 'Total (INR)', 'Status', 'Rejection Reason']
+        const header = ['Order', 'Date', 'Items', 'Order value (INR)', 'Customer paid (INR)', 'Commission (INR)', 'Your earning (INR)', 'Status', 'Simulated', 'Rejection Reason']
         const csv    = [header, ...rows]
           .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
           .join('\n')
@@ -664,7 +736,7 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
 
         {/* Summary cards */}
         <SummaryCard
-          label="Total Orders"
+          label="Delivered Orders"
           rawValue={summary.orders}
           display={(n) => n.toLocaleString('en-IN')}
           icon={ShoppingBag}
@@ -672,7 +744,7 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
           loading={loading}
         />
         <SummaryCard
-          label="Total Revenue"
+          label="Your Earnings"
           rawValue={summary.revenue}
           display={(n) => formatCurrency(n)}
           icon={IndianRupee}
@@ -680,13 +752,19 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
           loading={loading}
         />
         <SummaryCard
-          label="Avg. Order Value"
+          label="Avg. Earning / Order"
           rawValue={aov}
           display={(n) => summary.orders > 0 ? formatCurrency(n) : '—'}
           icon={TrendingUp}
           accentColor="#21A053"
           loading={loading}
         />
+        {summary.simulatedOrders > 0 && (
+          <p className="flex items-center gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <SimulatedBadge />
+            {summary.simulatedOrders} simulated · {formatCurrency(summary.simulatedEarnings)} (not paid out)
+          </p>
+        )}
       </div>
 
       {/* ═══ RIGHT PANEL — Orders Table ═══ */}
@@ -723,6 +801,8 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
                 <div className="h-4 w-32 rounded-md bg-slate-100 animate-pulse" />
                 <div className="h-4 flex-1 rounded-md bg-slate-100 animate-pulse" />
                 <div className="h-4 w-20 rounded-md bg-slate-100 animate-pulse" />
+                <div className="h-4 w-16 rounded-md bg-slate-100 animate-pulse" />
+                <div className="h-4 w-16 rounded-md bg-slate-100 animate-pulse" />
                 <div className="h-5 w-16 rounded-full bg-slate-100 animate-pulse" />
               </div>
             ))}
@@ -738,13 +818,15 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
         ) : (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px]">
+              <table className="w-full min-w-[860px]">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="px-5 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Order ID</th>
+                    <th className="px-5 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Order</th>
                     <th className="px-4 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Date & Time</th>
                     <th className="px-4 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Items</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Order value</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Commission</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Your earning</th>
                     <th className="px-4 py-3 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -763,7 +845,7 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
                           title="Click to copy full Order ID"
                         >
                           <span className="font-mono text-sm font-bold text-[#00326F]">
-                            #{order.id.slice(-8).toUpperCase()}
+                            {displayId(order)}
                           </span>
                           <span className="text-slate-300 group-hover/copy:text-[#00326F] transition-colors">
                             {copiedId === order.id
@@ -771,6 +853,7 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
                               : <Copy size={11} />}
                           </span>
                         </button>
+                        {order.is_simulated && <SimulatedBadge className="ml-2" />}
                       </td>
 
                       {/* Date */}
@@ -783,9 +866,18 @@ export function HistoryClient({ vendorId }: { vendorId: string }) {
                         <span className="truncate block">{itemsPreview(order.order_items)}</span>
                       </td>
 
-                      {/* Total */}
-                      <td className="px-4 py-3.5 text-right text-sm font-bold text-[#022135] tabular-nums whitespace-nowrap">
-                        {formatCurrency(order.total_amount)}
+                      {/* Order value */}
+                      <td className="px-4 py-3.5 text-right text-sm text-[#022135] tabular-nums whitespace-nowrap">
+                        {formatCurrency(order.subtotal ?? order.total_amount)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right text-xs text-slate-500 tabular-nums whitespace-nowrap">
+                        {order.status === 'delivered' ? `− ${formatCurrency(order.commission ?? 0)}` : '—'}
+                      </td>
+                      <td className={cn(
+                        'px-4 py-3.5 text-right text-sm font-bold tabular-nums whitespace-nowrap',
+                        order.status === 'delivered' ? 'text-[#21A053]' : 'text-slate-300',
+                      )}>
+                        {order.status === 'delivered' ? formatCurrency(order.earning ?? 0) : formatCurrency(0)}
                       </td>
 
                       {/* Status badge */}
