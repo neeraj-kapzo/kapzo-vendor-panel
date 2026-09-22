@@ -215,7 +215,13 @@ export async function fetchDashboardStats(
   const activeToday = activeOrders.filter((o) => new Date(o.created_at) >= todayStart)
 
   const total7 = historyWeek.total + activeOrders.length
-  const accepted7 = statsWeek.deliveredCount + activeOrders.length
+  // History and active orders include simulated ones; stats' top-level
+  // totals are real-only, so add the simulated delivered count back in to
+  // keep numerator and denominator over the same set of orders.
+  const accepted7 =
+    statsWeek.deliveredCount +
+    (statsWeek.simulated?.deliveredCount ?? 0) +
+    activeOrders.length
 
   return {
     todayCount: historyToday.total + activeToday.length,
