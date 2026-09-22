@@ -179,7 +179,11 @@ shop. Consequences worth knowing:
 - Settlements ledger — payouts are offline; the page shows earnings from
   `/vendor/stats` as a last-30-days payout breakdown (gross sales, commission,
   earnings; per-order amounts live on History) and a separate "Simulated
-  earnings (not paid out)" card for training orders
+  earnings (not paid out)" card for training orders. That card's "Practice
+  withdrawal" button rehearses the payout request with simulated earnings
+  (`GET`/`POST /vendor/simulated-settlements`); the rows show in Transaction
+  History badged Simulated, are never paid out, and are deleted by the admin
+  simulation reset. Real "Request Withdrawal" still only toasts (offline payouts)
 - History custom date ranges beyond the backend's 30-day window
 - `registerVendor()` in `lib/api/index.ts` still posts to `/vendors/register`,
   which the backend removed when vendor self-signup was dropped — dead code,

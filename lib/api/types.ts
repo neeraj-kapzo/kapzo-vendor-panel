@@ -208,3 +208,16 @@ export interface OrderStatusEvent {
 export interface SimulationResetEvent {
   vendorId: string
 }
+
+/** One practice withdrawal of simulated earnings (never paid out). */
+export interface BackendSimulatedSettlement {
+  id: string
+  amount: number
+  createdAt: string
+}
+
+/** `GET /vendor/simulated-settlements` — simulated earnings not yet practice-withdrawn, plus history. */
+export interface BackendSimulatedSettlements {
+  available: number
+  items: BackendSimulatedSettlement[]
+}

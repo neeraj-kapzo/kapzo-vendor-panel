@@ -11,6 +11,8 @@ import type {
   BackendInventoryPage,
   BackendNotification,
   BackendOrderHistoryPage,
+  BackendSimulatedSettlement,
+  BackendSimulatedSettlements,
   BackendUser,
   BackendVendor,
   BackendVendorInventory,
@@ -176,6 +178,16 @@ export async function fetchOrder(vendorId: string, orderId: string): Promise<Ord
 
 export function fetchVendorStats(range: StatsRange = 'today'): Promise<BackendVendorStats> {
   return api<BackendVendorStats>('/vendor/stats', { query: { range } })
+}
+
+/** Practice withdrawals of simulated (training) earnings — never real payouts. */
+export function fetchSimulatedSettlements(): Promise<BackendSimulatedSettlements> {
+  return api<BackendSimulatedSettlements>('/vendor/simulated-settlements')
+}
+
+/** Practice-withdraws the whole available simulated balance (422 when there is none). */
+export function requestPracticeWithdrawal(): Promise<BackendSimulatedSettlement> {
+  return api<BackendSimulatedSettlement>('/vendor/simulated-settlements', { method: 'POST' })
 }
 
 export function fetchOrderHistory(

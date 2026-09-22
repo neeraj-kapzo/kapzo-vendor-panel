@@ -11,7 +11,11 @@ import { StatsCard } from '@/components/vendor/StatsCard'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import { cn, formatCurrency } from '@/lib/utils'
 import { isDemoMode, type DemoSettlement } from '@/lib/demo'
-import type { BackendVendorStats } from '@/lib/api'
+import {
+  requestPracticeWithdrawal,
+  type BackendSimulatedSettlement,
+  type BackendVendorStats,
+} from '@/lib/api'
 import toast from 'react-hot-toast'
 
 /* ─── Types ─── */
@@ -19,7 +23,25 @@ type SettlementStatus = 'pending' | 'processing' | 'completed' | 'failed'
 type StatusFilter = 'all' | SettlementStatus
 type DatePreset   = 'all' | 'month' | 'quarter' | 'custom'
 
-type Settlement = DemoSettlement
+/** `is_simulated` rows are practice withdrawals of simulated earnings — never paid out. */
+type Settlement = DemoSettlement & { is_simulated?: boolean }
+
+/** Backend practice withdrawal → a Transaction History row (shown as Processing, badged Simulated). */
+export function mapPracticeWithdrawal(s: BackendSimulatedSettlement, vendorId: string): Settlement {
+  return {
+    id:              s.id,
+    vendor_id:       vendorId,
+    amount:          s.amount,
+    status:          'processing',
+    period_start:    s.createdAt,
+    period_end:      s.createdAt,
+    settled_at:      null,
+    transaction_ref: null,
+    notes:           'Practice withdrawal of simulated earnings — no money is paid out.',
+    created_at:      s.createdAt,
+    is_simulated:    true,
+  }
+}
 
 /* ─── Constants ─── */
 const PAGE_SIZE = 10
@@ -149,11 +171,14 @@ function WithdrawModal({
   onClose,
   onConfirm,
   loading,
+  practice = false,
 }: {
   pendingAmount: number
   onClose: () => void
   onConfirm: () => void
   loading: boolean
+  /** Practice run over simulated earnings — same flow, nothing is paid out. */
+  practice?: boolean
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -166,8 +191,13 @@ function WithdrawModal({
               <ArrowDownToLine size={16} className="text-[#21A053]" />
             </div>
             <div>
-              <p className="text-sm font-bold text-[#022135]">Request Withdrawal</p>
-              <p className="text-[10px] text-slate-400">Initiate payout to your bank account</p>
+              <p className="flex items-center gap-2 text-sm font-bold text-[#022135]">
+                {practice ? 'Practice Withdrawal' : 'Request Withdrawal'}
+                {practice && <SimulatedBadge />}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                {practice ? 'Rehearse a payout with simulated earnings' : 'Initiate payout to your bank account'}
+              </p>
             </div>
           </div>
           <button
@@ -188,7 +218,11 @@ function WithdrawModal({
           <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200/60 px-3.5 py-3">
             <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-700 leading-relaxed">
-              Funds are typically transferred within <strong>2–3 business days</strong> to your registered bank account ending in <strong>••••3456</strong>.
+              {practice ? (
+                <>This is a <strong>practice run</strong>: simulated earnings from training orders are never paid out, and no request is sent to Kapzo. It appears in your history until Kapzo resets the simulation.</>
+              ) : (
+                <>Funds are typically transferred within <strong>2–3 business days</strong> to your registered bank account ending in <strong>••••3456</strong>.</>
+              )}
             </p>
           </div>
         </div>
@@ -207,7 +241,7 @@ function WithdrawModal({
             className="flex-1 h-10 rounded-xl bg-[#21A053] hover:bg-[#178040] text-white text-sm font-bold shadow-[0_2px_10px_rgba(33,160,83,0.3)] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
-            Confirm
+            {practice ? 'Confirm practice' : 'Confirm'}
           </button>
         </div>
       </div>
@@ -251,6 +285,7 @@ function DetailPanel({
               <div>
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Settlement Amount</p>
                 <p className="mt-1 text-2xl font-bold text-[#022135] tabular-nums">{formatCurrency(settlement.amount)}</p>
+                {settlement.is_simulated && <SimulatedBadge className="mt-1.5" />}
               </div>
               <span className={cn('px-2.5 py-1 rounded-full text-[11px] font-semibold', s.badge)}>
                 {s.label}
@@ -340,6 +375,8 @@ interface SettlementsClientProps {
   failedCount:      number
   lastStatus:       SettlementStatus
   earnings?:        BackendVendorStats
+  /** Simulated earnings not yet practice-withdrawn (live mode only). */
+  practiceAvailable?: number
 }
 
 export function SettlementsClient({
@@ -351,9 +388,11 @@ export function SettlementsClient({
   failedCount,
   lastStatus,
   earnings,
+  practiceAvailable = 0,
 }: SettlementsClientProps) {
   const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements)
   const [currentPending, setCurrentPending] = useState(pendingAmount)
+  const [practiceBalance, setPracticeBalance] = useState(practiceAvailable)
 
   /* Filters */
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -370,6 +409,24 @@ export function SettlementsClient({
   /* Withdraw modal */
   const [showWithdraw, setShowWithdraw]     = useState(false)
   const [withdrawLoading, setWithdrawLoading] = useState(false)
+
+  /* Practice withdrawal (simulated earnings) */
+  const [showPractice, setShowPractice]       = useState(false)
+  const [practiceLoading, setPracticeLoading] = useState(false)
+
+  const handlePracticeWithdraw = useCallback(async () => {
+    setPracticeLoading(true)
+    try {
+      const row = await requestPracticeWithdrawal()
+      setSettlements((prev) => [mapPracticeWithdrawal(row, vendorId), ...prev])
+      setPracticeBalance(0)
+      setShowPractice(false)
+      toast.success('Practice withdrawal recorded — simulated, nothing is paid out.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not record the practice withdrawal')
+    }
+    setPracticeLoading(false)
+  }, [vendorId])
 
   /* ── Filtering ── */
   const [dateFrom, dateTo] = getDateBound(datePreset, customFrom, customTo)
@@ -502,6 +559,15 @@ export function SettlementsClient({
                 <div className="flex justify-between border-t border-amber-200 pt-1.5 font-bold"><dt>Simulated earnings</dt><dd className="tabular-nums">{formatCurrency(earnings.simulated.earnings)}</dd></div>
               </dl>
               <p className="mt-2 text-[11px] text-amber-700">Training orders created by Kapzo. They are excluded from your payout and disappear when Kapzo resets them.</p>
+              {practiceBalance > 0 && (
+                <button
+                  onClick={() => setShowPractice(true)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 h-9 rounded-xl border border-amber-300 bg-white text-xs font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  <ArrowDownToLine size={13} />
+                  Practice withdrawal · {formatCurrency(practiceBalance)}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -629,6 +695,7 @@ export function SettlementsClient({
                         <div className="flex items-center gap-2.5">
                           <span className={cn('w-2 h-2 rounded-full shrink-0', st.dot)} />
                           <span className="text-xs font-medium text-[#022135]">{fmtPeriod(s.period_start, s.period_end)}</span>
+                          {s.is_simulated && <SimulatedBadge />}
                         </div>
                       </td>
                       <td className="px-5 py-4 text-xs text-slate-500 whitespace-nowrap">
@@ -696,6 +763,15 @@ export function SettlementsClient({
           onClose={() => setShowWithdraw(false)}
           onConfirm={handleWithdraw}
           loading={withdrawLoading}
+        />
+      )}
+      {showPractice && (
+        <WithdrawModal
+          practice
+          pendingAmount={practiceBalance}
+          onClose={() => setShowPractice(false)}
+          onConfirm={handlePracticeWithdraw}
+          loading={practiceLoading}
         />
       )}
       {selected && (

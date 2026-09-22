@@ -1,9 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SettlementsClient } from './SettlementsClient'
+import { SettlementsClient, mapPracticeWithdrawal } from './SettlementsClient'
 import { useRequireVendor } from '@/lib/hooks/useRequireVendor'
-import { fetchVendorStats, type BackendVendorStats } from '@/lib/api'
+import {
+  fetchSimulatedSettlements,
+  fetchVendorStats,
+  type BackendSimulatedSettlements,
+  type BackendVendorStats,
+} from '@/lib/api'
 import { SIMULATION_RESET_EVENT } from '@/lib/hooks/useSimulationReset'
 import { Skeleton } from '@/components/ui/Skeleton'
 import {
@@ -14,6 +19,10 @@ import {
 export default function SettlementsPage() {
   const { vendor, loading: vendorLoading } = useRequireVendor()
   const [stats, setStats] = useState<BackendVendorStats | null>(null)
+  const [practice, setPractice] = useState<BackendSimulatedSettlements>({ available: 0, items: [] })
+  // Bumped on every completed load so SettlementsClient re-seeds its local
+  // state (pending amount, practice rows) — e.g. after a simulation reset.
+  const [loadVersion, setLoadVersion] = useState(0)
   // "Latest request wins" — see the identical comment in inventory/page.tsx
   // for why this isn't a one-shot "already started" guard.
   const fetchIdRef = useRef(0)
@@ -27,16 +36,25 @@ export default function SettlementsPage() {
     // Phase 1: payouts are settled offline, so there is no settlement ledger
     // yet — the pending balance is the last 30 days' earnings from the
     // backend stats endpoint (gross sales minus Kapzo commission).
-    fetchVendorStats('month')
-      .then((s) => {
-        if (fetchIdRef.current === fetchId) setStats(s)
-      })
-      .catch(() => {
-        if (fetchIdRef.current === fetchId) {
-          setStats({ deliveredCount: 0, grossSales: 0, commission: 0, earnings: 0 })
-        }
-      })
+    // Practice withdrawals of simulated earnings load alongside; a failure
+    // there must never hide the real payout figures.
+    Promise.all([
+      fetchVendorStats('month').catch(
+        (): BackendVendorStats => ({ deliveredCount: 0, grossSales: 0, commission: 0, earnings: 0 }),
+      ),
+      fetchSimulatedSettlements().catch((): BackendSimulatedSettlements => ({ available: 0, items: [] })),
+    ]).then(([s, p]) => {
+      if (fetchIdRef.current !== fetchId) return
+      setStats(s)
+      setPractice(p)
+      setLoadVersion((v) => v + 1)
+    })
   }, [vendor])
+
+  const practiceRows = useMemo(
+    () => (vendor ? practice.items.map((row) => mapPracticeWithdrawal(row, vendor.id)) : []),
+    [practice, vendor],
+  )
 
   useEffect(() => {
     load()
@@ -80,9 +98,10 @@ export default function SettlementsPage() {
 
   return (
     <SettlementsClient
-      key={stats.earnings}
+      key={loadVersion}
       vendorId={vendor.id}
-      initialSettlements={[]}
+      initialSettlements={practiceRows}
+      practiceAvailable={practice.available}
       totalSettled={0}
       pendingAmount={stats.earnings}
       earnings={stats}
