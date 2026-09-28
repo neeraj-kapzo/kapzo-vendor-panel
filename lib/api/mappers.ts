@@ -2,13 +2,17 @@ import type {
   CatalogItem,
   Order,
   OrderItem,
+  OrderPaymentStatus,
   OrderStatus,
+  PaymentMode,
   OrderWithItems,
   Vendor,
   VendorStatus,
 } from '@/types/database.types'
 import type {
+  BackendOrderPayment,
   BackendOrderStatus,
+  BackendPaymentMode,
   BackendVendor,
   BackendVendorOrder,
   BackendVerificationStatus,
@@ -16,6 +20,31 @@ import type {
 
 export function mapOrderStatus(status: BackendOrderStatus): OrderStatus {
   return status.toLowerCase() as OrderStatus
+}
+
+export function mapPaymentMode(mode: BackendPaymentMode | undefined): PaymentMode {
+  return (mode ?? 'UNSET').toLowerCase() as PaymentMode
+}
+
+export function mapOrderPaymentStatus(
+  status: BackendOrderPayment | undefined,
+): OrderPaymentStatus {
+  return (status ?? 'UNPAID').toLowerCase() as OrderPaymentStatus
+}
+
+/**
+ * What the vendor sees about the money. At PENDING this always reads
+ * "Awaiting payment choice" — deliberately shown rather than hidden, because
+ * the vendor is accepting on trust and the UI should say so.
+ */
+export function paymentLabel(order: {
+  payment_mode: PaymentMode
+  payment_status: OrderPaymentStatus
+}): string {
+  if (order.payment_mode === 'cod') return 'Cash on delivery'
+  if (order.payment_status === 'paid') return 'Prepaid'
+  if (order.payment_mode === 'online') return 'Paying online'
+  return 'Awaiting payment choice'
 }
 
 export function mapVendorStatus(status: BackendVerificationStatus): VendorStatus {
@@ -104,6 +133,8 @@ export function mapVendorOrder(o: BackendVendorOrder, vendorId: string): OrderWi
     expires_at: o.expiresAt,
     seconds_left: o.secondsLeft ?? null,
     is_simulated: o.isSimulated ?? false,
+    payment_mode: mapPaymentMode(o.paymentMode),
+    payment_status: mapOrderPaymentStatus(o.paymentStatus),
     order_items,
   }
 }

@@ -7,7 +7,7 @@
  */
 
 import type {
-  Vendor, Order, OrderStatus, OrderItem, CatalogItem,
+  Vendor, Order, OrderStatus, OrderItem, CatalogItem, PaymentMode, OrderPaymentStatus,
 } from '@/types/database.types'
 
 /* ── Structural equivalents (no client-component import needed) ────── */
@@ -142,7 +142,13 @@ function makeOrder(
   status:    OrderStatus,
   createdAt: Date,
   pairs:     { catId: string; qty: number }[],
-  opts?:     { rejection_reason?: string; prescription_verified?: boolean; updatedOffset?: number }
+  opts?:     {
+    rejection_reason?: string
+    prescription_verified?: boolean
+    updatedOffset?: number
+    payment_mode?: PaymentMode
+    payment_status?: OrderPaymentStatus
+  }
 ): DemoOrderWithItems {
   const items       = buildItems(pairs).map((i) => ({ ...i, order_id: id }))
   const totalAmount = items.reduce((s, i) => s + i.unit_price * i.quantity, 0)
@@ -163,8 +169,27 @@ function makeOrder(
     rejection_reason:      opts?.rejection_reason ?? null,
     prescription_verified: hasPrescription,
     prescription_url:      hasPrescription ? DEMO_PRESCRIPTION_URL : null,
+    payment_mode:          opts?.payment_mode ?? demoPaymentMode(id, status),
+    payment_status:        opts?.payment_status ?? demoPaymentStatus(id, status),
     order_items:           items,
   }
+}
+
+/**
+ * A spread of payment states for demo orders: pending orders are always
+ * unchosen (the customer picks after you accept); later ones alternate
+ * between prepaid and cash on delivery, with delivered cash orders paid.
+ */
+function demoPaymentMode(id: string, status: OrderStatus): PaymentMode {
+  if (status === 'pending' || status === 'rejected') return 'unset'
+  return id.length % 2 === 0 ? 'cod' : 'online'
+}
+
+function demoPaymentStatus(id: string, status: OrderStatus): OrderPaymentStatus {
+  const mode = demoPaymentMode(id, status)
+  if (mode === 'online') return 'paid'
+  if (mode === 'cod' && status === 'delivered') return 'paid'
+  return 'unpaid'
 }
 
 /* ── Active orders — timestamps relative to now (timers work) ───── */

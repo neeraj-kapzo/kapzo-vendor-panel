@@ -5,7 +5,6 @@
  */
 
 export type BackendOrderStatus =
-  | 'PAYMENT_PENDING'
   | 'PENDING'
   | 'ACCEPTED'
   | 'PACKING'
@@ -16,6 +15,11 @@ export type BackendOrderStatus =
   | 'CANCELLED'
 
 export type BackendVerificationStatus = 'PENDING' | 'ACTIVE' | 'BANNED'
+
+/** Confirm-then-pay: how the customer will pay, chosen after the vendor accepts. */
+export type BackendPaymentMode = 'UNSET' | 'ONLINE' | 'COD'
+/** Whether the order's money has arrived. */
+export type BackendOrderPayment = 'UNPAID' | 'PAID' | 'REFUNDED'
 
 export interface BackendUser {
   id: string
@@ -103,6 +107,8 @@ export interface BackendVendorOrder {
   secondsLeft?: number | null
   /** Admin-simulated order (training). Real alert + state machine; never paid out. */
   isSimulated?: boolean
+  paymentMode: BackendPaymentMode
+  paymentStatus: BackendOrderPayment
 }
 
 export interface BackendVendorOrderPage {
@@ -196,6 +202,8 @@ export interface NewOrderEvent {
   orderNumber: string
   expiresAt: string | null
   total: string | number
+  /** Always UNSET at this point — the customer chooses after you accept. */
+  paymentMode?: BackendPaymentMode
   isSimulated?: boolean
 }
 

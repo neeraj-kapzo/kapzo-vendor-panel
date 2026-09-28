@@ -9,8 +9,6 @@
 
 export type VendorStatus = 'pending' | 'active' | 'banned'
 
-// PAYMENT_PENDING exists on the backend but never reaches the vendor panel —
-// orders enter the vendor queue only once payment is confirmed.
 export type OrderStatus =
   | 'pending'
   | 'accepted'
@@ -20,6 +18,13 @@ export type OrderStatus =
   | 'delivered'
   | 'rejected'
   | 'cancelled'
+
+/**
+ * Confirm-then-pay: the vendor accepts first, then the customer chooses
+ * Prepaid (`online`) or Cash on Delivery (`cod`). `unset` = not chosen yet.
+ */
+export type PaymentMode = 'unset' | 'online' | 'cod'
+export type OrderPaymentStatus = 'unpaid' | 'paid' | 'refunded'
 
 export interface Vendor {
   id: string
@@ -100,6 +105,8 @@ export interface Order {
   seconds_left?: number | null
   /** Admin-simulated order — shown with a "Simulated" badge, never paid out. */
   is_simulated?: boolean
+  payment_mode: PaymentMode
+  payment_status: OrderPaymentStatus
 }
 
 export interface OrderItem {

@@ -6,6 +6,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { OrderStatusBadge } from '@/components/ui/Badge'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
+import { PaymentBadge } from '@/components/vendor/PaymentBadge'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import {
@@ -95,6 +96,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
               </span>
               <OrderStatusBadge status={order.status} />
               {order.is_simulated && <SimulatedBadge />}
+              <PaymentBadge order={order} />
               {order.prescription_verified && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#21A053] bg-[#21A053]/8 px-2 py-0.5 rounded-[999px]">
                   <FileText size={10} /> Rx Verified

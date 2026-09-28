@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { OrderStatusBadge } from '@/components/ui/Badge'
 import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
+import { PaymentBadge } from '@/components/vendor/PaymentBadge'
 import {
   acceptOrder,
   fetchActiveOrders,
@@ -199,6 +200,7 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
               #{order.id.slice(-6).toUpperCase()}
             </span>
             {order.is_simulated && <SimulatedBadge />}
+            <PaymentBadge order={order} />
             {order.prescription_verified && (
               order.prescription_url ? (
                 <button
@@ -374,6 +376,7 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
             <h2 className="flex items-center gap-2 text-xl font-bold text-[#022135] mt-0.5">
               #{order.id.slice(-6).toUpperCase()}
               {order.is_simulated && <SimulatedBadge />}
+              <PaymentBadge order={order} />
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -648,6 +651,7 @@ function OrderRow({
         #{order.id.slice(-6).toUpperCase()}
       </span>
       {order.is_simulated && <SimulatedBadge />}
+      <PaymentBadge order={order} />
 
       {/* Middle info */}
       <div className="flex-1 min-w-0">
