@@ -1,0 +1,56 @@
+# Deploys the vendor panel (vendor.kapzo.in) to Google Cloud Storage whenever code lands on the default
+# branch. Runs docs/deploy.sh (build, bundle checks, rsync, cache headers, live
+# verification) — the same script used for manual releases.
+#
+# Auth is keyless: GitHub OIDC -> Workload Identity Federation -> the
+# gh-deploy-panels service account. One-time GCP setup: kapzo-backend/docs/CICD.md.
+# The NEXT_PUBLIC_* values below are public client-side config that ships in
+# every browser bundle; they are not secrets.
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/756344915330/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: gh-deploy-panels@kapzo-prod.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: kapzo-prod
+
+      - name: Build and deploy
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyC_ETawwzvtcE3IiCNGNmwGhB_eJWBFWkI"
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyBsZpm3EYQrrr1FuW2gGehv6k2oPtmfC-A"
+          NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: "3bcd0abc228cd953290a8a40"
+        run: bash docs/deploy.sh
