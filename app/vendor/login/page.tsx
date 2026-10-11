@@ -8,10 +8,11 @@ import {
   RecaptchaVerifier,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
-  signOut,
   type ConfirmationResult,
 } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase'
+import { signOutVendor } from '@/lib/session'
+import { useVendorStore } from '@/lib/store/vendorStore'
 import { ApiError, bootstrap, fetchVendorMe } from '@/lib/api'
 import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 import { OtpInput } from '@/components/auth/OtpInput'
@@ -30,6 +31,7 @@ type OtpStep  = 'phone' | 'verify'
 /* ─── Main page ─────────────────────────────────────────────── */
 export default function VendorLoginPage() {
   const router  = useRouter()
+  const setVendor = useVendorStore((s) => s.setVendor)
   const [screen, setScreen]   = useState<Screen>('login')
   const [tab, setTab]         = useState<AuthTab>('phone')
 
@@ -83,6 +85,9 @@ export default function VendorLoginPage() {
     try {
       const me = await fetchVendorMe()
       if (me.status === 'banned') { setScreen('banned'); return }
+      // Seed the store with *this* account so the shell never shows whoever
+      // was signed in before in the same tab (see lib/session.ts).
+      setVendor(me)
       // Pending vendors land on their profile; everyone else on the dashboard.
       router.push(me.status === 'active' ? '/vendor/dashboard' : '/vendor/profile')
     } catch (err) {
@@ -110,7 +115,7 @@ export default function VendorLoginPage() {
         // Kapzo account, and Firebase minted a separate unlinked uid for this
         // sign-in. Don't leave the user signed in as that orphan — sign out
         // and surface the backend's instructions on how to link the methods.
-        await signOut(getFirebaseAuth()).catch(() => undefined)
+        await signOutVendor().catch(() => undefined)
         setOtpStep('phone'); setOtp(''); setConfirmation(null)
         toast.error(err.message, { duration: 10000 })
         return
@@ -370,7 +375,7 @@ function StatusScreen() {
   const router  = useRouter()
 
   async function handleLogout() {
-    await getFirebaseAuth().signOut()
+    await signOutVendor()
     router.push('/vendor/login')
   }
 

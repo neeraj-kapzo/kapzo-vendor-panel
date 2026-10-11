@@ -27,6 +27,7 @@ export type DemoMergedInventoryItem = {
   stock_qty:             number
   is_available:          boolean
   manufacturer:          string
+  pack_size:             string | null
   category:              string
   requires_prescription: boolean
 }
@@ -112,6 +113,11 @@ export const DEMO_INVENTORY: DemoMergedInventoryItem[] = DEMO_CATALOG.map((c, i)
   // cat-04 (Metformin) and cat-11 (Vit D3) shown as unavailable for demo variety
   is_available: i !== 3 && i !== 10,
   manufacturer: c.manufacturer ?? '',
+  pack_size:    [
+    'Strip of 15 tablets', 'Strip of 10 capsules', 'Strip of 3 tablets', 'Strip of 20 tablets',
+    'Strip of 15 tablets', 'Strip of 15 capsules', 'Strip of 10 tablets', 'Strip of 15 tablets',
+    'Strip of 15 tablets', 'Strip of 15 tablets', 'Strip of 4 capsules', 'Bottle of 30 tablets',
+  ][i],
   category:     c.category ?? '',
   requires_prescription: c.requires_prescription ?? false,
 }))
