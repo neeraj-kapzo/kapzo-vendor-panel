@@ -27,7 +27,11 @@ export type MergedInventoryItem = {
   // Shown in the "view details" modal, not the table/grid — deliberately
   // excludes the catalog's Product ID (externalId), which is an internal
   // import key with no meaning to a vendor.
-  manufacturer:          string
+  // Null on imported OTC/FMCG rows whose source names no company; the
+  // details modal already falls back to an em dash.
+  manufacturer:          string | null
+  // Pack size ("Strip of 10 tablets") — the table's Nos column.
+  pack_size:             string | null
   category:              string
   requires_prescription: boolean
 }
@@ -36,6 +40,7 @@ type FilterType = 'all' | 'available' | 'unavailable'
 type ViewType   = 'table' | 'grid'
 
 const PAGE_SIZE = 20 // matches the backend's page size exactly
+const MIN_SEARCH_CHARS = 3 // matches the backend's search-term minimum
 
 interface InventoryClientProps {
   vendorId:   string
@@ -58,6 +63,7 @@ function mapInventoryRow(row: BackendInventoryRow): MergedInventoryItem {
     stock_qty:    0, // backend tracks availability only, no stock counts
     is_available: row.isAvailable,
     manufacturer: row.catalogItem.manufacturer,
+    pack_size:    row.catalogItem.packSize,
     category:     row.catalogItem.category,
     requires_prescription: row.catalogItem.requiresPrescription,
   }
@@ -90,6 +96,10 @@ function ProductDetailsModal({ item, onClose }: { item: MergedInventoryItem | nu
             <div>
               <dt className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Manufacturer</dt>
               <dd className="text-[#022135] mt-0.5">{item.manufacturer || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Pack Size</dt>
+              <dd className="text-[#022135] mt-0.5">{item.pack_size || '—'}</dd>
             </div>
             <div>
               <dt className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Category</dt>
@@ -238,7 +248,11 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedSearch(search.trim())
+      // The backend rejects search terms under 3 characters (they match most
+      // of the 665k-row catalog), so shorter input is treated as "no search"
+      // — which also keeps "d" → "do" from firing duplicate list requests.
+      const term = search.trim()
+      setDebouncedSearch(term.length >= MIN_SEARCH_CHARS ? term : '')
       setPage(1)
     }, 300)
     return () => clearTimeout(t)
@@ -280,10 +294,13 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
      to know which mode it's in. ── */
   const demoSearched = useMemo(() => {
     if (!isDemoMode) return items
-    const q = debouncedSearch.toLowerCase()
-    return items.filter((i) =>
-      !q || i.name.toLowerCase().includes(q) || (i.salt_name ?? '').toLowerCase().includes(q)
-    )
+    // Same rule as the backend: every word must appear in the brand name,
+    // salt or manufacturer (not necessarily the same one).
+    const words = debouncedSearch.toLowerCase().split(/\s+/).filter(Boolean)
+    return items.filter((i) => {
+      const haystack = [i.name, i.salt_name, i.manufacturer].join(' ').toLowerCase()
+      return words.every((w) => haystack.includes(w))
+    })
   }, [items, debouncedSearch])
 
   const pageItems = isDemoMode
@@ -457,7 +474,7 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by medicine name or salt…"
+            placeholder="Search by brand, salt or manufacturer (min. 3 letters)…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full h-10 pl-9 pr-3 rounded-[8px] border border-slate-200 bg-white text-sm text-[#022135] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#21A053]/30 focus:border-[#21A053]"
@@ -576,8 +593,10 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
                     />
                   </th>
                   <th className="w-12 px-3 py-3" />
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Medicine</th>
+                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Name</th>
                   <th className="px-3 py-3 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Price</th>
+                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Nos</th>
+                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Manufacturer</th>
                   <th className="px-3 py-3 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Available</th>
                   <th className="w-10 px-3 py-3" />
                 </tr>
@@ -622,6 +641,20 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
                         <span className="text-sm font-semibold text-[#022135] tabular-nums">
                           {formatCurrency(item.mrp)}
                         </span>
+                      </td>
+
+                      {/* Nos — pack size */}
+                      <td className="px-3 py-3">
+                        <p className="text-xs text-slate-500 whitespace-nowrap truncate max-w-[180px]" title={item.pack_size ?? undefined}>
+                          {item.pack_size || '—'}
+                        </p>
+                      </td>
+
+                      {/* Manufacturer */}
+                      <td className="px-3 py-3">
+                        <p className="text-xs text-slate-500 truncate max-w-[200px]" title={item.manufacturer ?? undefined}>
+                          {item.manufacturer || '—'}
+                        </p>
                       </td>
 
                       {/* Available toggle */}
@@ -703,6 +736,9 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
                   <p className="text-sm font-semibold text-[#022135] leading-tight truncate">{item.name}</p>
                   {item.salt_name && (
                     <p className="text-[10px] text-slate-400 mt-0.5 truncate">{item.salt_name}</p>
+                  )}
+                  {item.pack_size && (
+                    <p className="text-[10px] text-slate-500 mt-0.5 truncate">{item.pack_size}</p>
                   )}
 
                   <div className="flex items-end justify-between mt-2.5">

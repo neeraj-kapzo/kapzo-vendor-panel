@@ -15,16 +15,22 @@ interface VendorStore {
   clearPendingOrder: (orderId: string) => void
   updateOrderStatus: (orderId: string, status: OrderStatus, updatedAt?: string) => void
   removeSimulatedOrders: () => void
+  /** Back to the signed-out state — called on logout so the next account starts clean. */
+  reset: () => void
 }
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'packing', 'packed', 'dispatched']
 
-export const useVendorStore = create<VendorStore>((set) => ({
+const INITIAL_STATE = {
   vendor: null,
   isOnline: false,
   pendingOrders: [],
   activeOrders: [],
   unreadOrderCount: 0,
+} satisfies Partial<VendorStore>
+
+export const useVendorStore = create<VendorStore>((set) => ({
+  ...INITIAL_STATE,
 
   setVendor: (vendor) => set({ vendor, isOnline: vendor?.is_online ?? false }),
 
@@ -88,4 +94,6 @@ export const useVendorStore = create<VendorStore>((set) => ({
         unreadOrderCount: pendingOrders.length,
       }
     }),
+
+  reset: () => set(INITIAL_STATE),
 }))

@@ -156,7 +156,11 @@ export interface BackendCatalogItem {
   id: string
   name: string
   saltComposition: string
-  manufacturer: string
+  /** Null on a few hundred imported OTC/FMCG rows whose source names no
+   * marketing company. Admin-entered items always carry one. */
+  manufacturer: string | null
+  /** e.g. "Strip of 10 tablets"; null where the source had none. */
+  packSize: string | null
   mrp: string | number
   imageUrl: string | null
   requiresPrescription: boolean

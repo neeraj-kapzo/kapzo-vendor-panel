@@ -14,8 +14,7 @@ import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
 import { useSimulationResetListener } from '@/lib/hooks/useSimulationReset'
-import { getFirebaseAuth } from '@/lib/firebase'
-import { disconnectSocket } from '@/lib/realtime'
+import { signOutVendor } from '@/lib/session'
 import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 
@@ -65,8 +64,7 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
       router.push('/vendor/login')
       return
     }
-    disconnectSocket()
-    await getFirebaseAuth().signOut()
+    await signOutVendor()
     router.push('/vendor/login')
   }
 

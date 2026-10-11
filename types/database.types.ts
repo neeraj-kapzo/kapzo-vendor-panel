@@ -65,7 +65,8 @@ export interface CatalogItem {
   image_url: string | null
   mrp: number
   created_by_admin: boolean
-  manufacturer?: string
+  manufacturer?: string | null
+  pack_size?: string | null
   category?: string
   requires_prescription?: boolean
 }
