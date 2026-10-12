@@ -76,6 +76,9 @@ export interface BackendVendor {
   email: string | null
   licenseUrl: string | null
   fssaiUrl: string | null
+  /** Delivery zone the pin falls in; null while the pin is outside every zone. */
+  zoneId: string | null
+  zoneName: string | null
 }
 
 export interface BackendOrderItem {

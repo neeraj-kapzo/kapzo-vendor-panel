@@ -56,6 +56,8 @@ export interface Vendor {
   /** Map pin; null until the vendor (or Kapzo support) sets it. */
   lat: number | null
   lng: number | null
+  /** Name of the delivery zone the pin sits in; null/absent when outside every zone. */
+  zone_name?: string | null
 }
 
 export interface CatalogItem {

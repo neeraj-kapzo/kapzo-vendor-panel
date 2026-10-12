@@ -84,6 +84,7 @@ export function mapVendor(v: BackendVendor, fallbackEmail?: string | null): Vend
     license_file_key: v.licenseFileKey,
     lat: v.lat,
     lng: v.lng,
+    zone_name: v.zoneName ?? null,
   }
 }
 

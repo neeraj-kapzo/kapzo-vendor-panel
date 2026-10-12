@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { setVendorOnline } from '@/lib/api'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { Modal } from '@/components/ui/Modal'
+import { friendlyZoneError } from '@/lib/zones'
 import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -34,7 +35,8 @@ export function OnlineToggle({ variant = 'prominent' }: OnlineToggleProps) {
       setIsOnline(updated.is_online)
       toast.success(online ? "You're live — accepting orders" : "You're now offline")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update status')
+      const raw = err instanceof Error ? err.message : ''
+      toast.error(friendlyZoneError(raw) ?? (raw || 'Failed to update status'), { duration: 7000 })
     }
     setLoading(false)
     setConfirmOpen(false)
