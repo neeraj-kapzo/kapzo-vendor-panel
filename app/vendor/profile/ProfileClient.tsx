@@ -607,8 +607,9 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
           <p className="text-xs text-slate-500">
             Delivery zone:{' '}
             <span className="font-medium text-[#022135]">
-              {vendor.zone_name ?? 'Not in a service zone yet'}
+              {vendor.zone_name ?? 'Not assigned yet'}
             </span>
+            <span className="text-slate-400"> Kapzo assigns this automatically from your map pin.</span>
           </p>
           {!editing && !isBanned && (
             <p className="text-xs text-slate-400">
