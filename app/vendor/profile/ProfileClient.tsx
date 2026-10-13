@@ -604,6 +604,13 @@ export function ProfileClient({ vendor: initialVendor }: { vendor: Vendor }) {
             onChange={(pin) => patch('pin', pin)}
             disabled={!editing}
           />
+          <p className="text-xs text-slate-500">
+            Delivery zone:{' '}
+            <span className="font-medium text-[#022135]">
+              {vendor.zone_name ?? 'Not assigned yet'}
+            </span>
+            <span className="text-slate-400"> Kapzo assigns this automatically from your map pin.</span>
+          </p>
           {!editing && !isBanned && (
             <p className="text-xs text-slate-400">
               Choose <span className="font-medium text-slate-500">Edit Profile</span> to move the pin.

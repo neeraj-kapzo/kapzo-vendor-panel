@@ -78,6 +78,7 @@ export const DEMO_VENDOR: Vendor = {
   working_days:         ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   lat:                  19.0596,
   lng:                  72.8295,
+  zone_name:            'South Chennai',
   created_at:           '2025-01-15T00:00:00.000Z',
 }
 
