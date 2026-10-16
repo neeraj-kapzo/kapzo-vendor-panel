@@ -13,6 +13,7 @@ import { PaymentBadge } from '@/components/vendor/PaymentBadge'
 import {
   acceptOrder,
   fetchActiveOrders,
+  fetchClosedOrders,
   markOrderDispatched,
   markOrderPacked,
   markOrderPacking,
@@ -25,7 +26,7 @@ import { getSocket } from '@/lib/realtime'
 import { useOnSimulationReset } from '@/lib/hooks/useSimulationReset'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
-import { cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
+import { orderDisplayId, cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { Order, OrderItem, CatalogItem, OrderStatus } from '@/types/database.types'
 
@@ -197,7 +198,7 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-lg font-bold text-[#022135]">
-              #{order.id.slice(-6).toUpperCase()}
+              #{orderDisplayId(order)}
             </span>
             {order.is_simulated && <SimulatedBadge />}
             <PaymentBadge order={order} />
@@ -222,7 +223,7 @@ function PendingTimerCard({ order, queueCount, onAccept, onReject, busy }: Timer
           {rxOpen && order.prescription_url && (
             <PrescriptionViewer
               url={order.prescription_url}
-              orderId={order.id}
+              orderId={orderDisplayId(order)}
               onClose={() => setRxOpen(false)}
             />
           )}
@@ -374,7 +375,7 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
           <div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Order Details</p>
             <h2 className="flex items-center gap-2 text-xl font-bold text-[#022135] mt-0.5">
-              #{order.id.slice(-6).toUpperCase()}
+              #{orderDisplayId(order)}
               {order.is_simulated && <SimulatedBadge />}
               <PaymentBadge order={order} />
             </h2>
@@ -427,7 +428,7 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
           {rxOpen && order.prescription_url && (
             <PrescriptionViewer
               url={order.prescription_url}
-              orderId={order.id}
+              orderId={orderDisplayId(order)}
               onClose={() => setRxOpen(false)}
             />
           )}
@@ -554,7 +555,7 @@ function RejectionModal({ order, onClose, onConfirm, busy }: RejectionModalProps
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-red-700 text-sm">
-            Reject Order #{order?.id.slice(-6).toUpperCase()}
+            Reject Order #{order ? orderDisplayId(order) : ''}
           </p>
           <p className="text-xs text-red-400 mt-0.5">This action cannot be undone. Customer will be notified.</p>
         </div>
@@ -648,7 +649,7 @@ function OrderRow({
 
       {/* Order ID */}
       <span className="font-mono text-sm font-bold text-[#022135] shrink-0 w-20">
-        #{order.id.slice(-6).toUpperCase()}
+        #{orderDisplayId(order)}
       </span>
       {order.is_simulated && <SimulatedBadge />}
       <PaymentBadge order={order} />
@@ -825,10 +826,28 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
       }
     }
 
+    const refreshOrders = async () => {
+      try {
+        const [active, closed] = await Promise.all([
+          fetchActiveOrders(vendorId), fetchClosedOrders(vendorId),
+        ])
+        setActiveOrders(active)
+        setClosedOrders(closed)
+        setSelectedOrder((previous) => previous
+          ? [...active, ...closed].find((order) => order.id === previous.id) ?? null
+          : null)
+      } catch { /* Keep the current view on a transient failure. */ }
+    }
+    const poll = setInterval(() => void refreshOrders(), 30000)
+    socket.on('payment-updated', refreshOrders)
+    socket.on('connect', refreshOrders)
     socket.on('new-order', onNewOrder)
     socket.on('order-status', onOrderStatus)
 
     return () => {
+      clearInterval(poll)
+      socket.off('payment-updated', refreshOrders)
+      socket.off('connect', refreshOrders)
       socket.off('new-order', onNewOrder)
       socket.off('order-status', onOrderStatus)
     }

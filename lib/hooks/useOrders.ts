@@ -35,10 +35,12 @@ export function useOrders(vendorId: string | undefined) {
     const socket = getSocket()
     const refetch = () => void fetchOrders()
 
+    socket.on('payment-updated', refetch)
     socket.on('new-order', refetch)
     socket.on('order-status', refetch)
 
     return () => {
+      socket.off('payment-updated', refetch)
       socket.off('new-order', refetch)
       socket.off('order-status', refetch)
     }

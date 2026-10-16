@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ShoppingBag, X, ArrowRight, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { formatCurrency, timeAgo } from '@/lib/utils'
+import { orderDisplayId, formatCurrency, timeAgo } from '@/lib/utils'
 import { PrescriptionViewer } from '@/components/vendor/PrescriptionViewer'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import type { Order } from '@/types/database.types'
@@ -79,7 +79,7 @@ function NewOrderToastItem({
               </button>
             </div>
             <p className="flex items-center gap-2 text-sm font-semibold text-[#022135] mt-0.5">
-              #{alert.order.id.slice(-6).toUpperCase()}
+              #{orderDisplayId(alert.order)}
               {alert.order.is_simulated && <SimulatedBadge />}
             </p>
             <div className="flex items-center justify-between mt-1">
@@ -116,7 +116,7 @@ function NewOrderToastItem({
       {rxOpen && alert.order.prescription_url && (
         <PrescriptionViewer
           url={alert.order.prescription_url}
-          orderId={alert.order.id}
+          orderId={orderDisplayId(alert.order)}
           onClose={() => setRxOpen(false)}
         />
       )}

@@ -73,7 +73,7 @@ export function PrescriptionViewer({ url, orderId, onClose }: PrescriptionViewer
             <div>
               <p className="text-sm font-bold text-[#022135]">Prescription</p>
               <p className="text-[10px] text-slate-400 font-medium">
-                Order #{orderId.slice(-6).toUpperCase()}
+                Order #{orderId}
               </p>
             </div>
           </div>

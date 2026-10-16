@@ -1,5 +1,5 @@
 import { Clock, Package, FileText } from 'lucide-react'
-import { cn, formatCurrency, timeAgo } from '@/lib/utils'
+import { orderDisplayId, cn, formatCurrency, timeAgo } from '@/lib/utils'
 import { SimulatedBadge } from '@/components/vendor/SimulatedBadge'
 import { PaymentBadge } from '@/components/vendor/PaymentBadge'
 import type { Order, OrderStatus } from '@/types/database.types'
@@ -37,7 +37,7 @@ export function OrderFeedCard({ order }: OrderFeedCardProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-[#022135]">
-            #{order.id.slice(-6).toUpperCase()}
+            #{orderDisplayId(order)}
           </span>
           {order.is_simulated && <SimulatedBadge />}
           <PaymentBadge order={order} />

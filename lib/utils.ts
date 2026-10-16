@@ -33,3 +33,7 @@ export function timeAgo(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`
   return `${Math.floor(hrs / 24)}d ago`
 }
+
+export function orderDisplayId(order: { id: string; order_number?: string | null }): string {
+  return order.order_number?.trim() || `ORD-${order.id.replaceAll('-', '').slice(0, 8).toUpperCase()}`
+}

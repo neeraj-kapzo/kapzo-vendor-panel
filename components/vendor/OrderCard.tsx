@@ -16,7 +16,7 @@ import {
   markOrderPacking,
   rejectOrder as apiRejectOrder,
 } from '@/lib/api'
-import { formatCurrency, timeAgo } from '@/lib/utils'
+import { orderDisplayId, formatCurrency, timeAgo } from '@/lib/utils'
 import type { Order, OrderItem, CatalogItem, OrderStatus } from '@/types/database.types'
 import toast from 'react-hot-toast'
 
@@ -92,7 +92,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-[#022135]">
-                #{order.id.slice(-6).toUpperCase()}
+                #{orderDisplayId(order)}
               </span>
               <OrderStatusBadge status={order.status} />
               {order.is_simulated && <SimulatedBadge />}
@@ -133,7 +133,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-2">
                   <span className="text-xs text-slate-500">×{item.quantity}</span>
-                  <span className="text-xs font-semibold text-[#022135]">{formatCurrency(item.unit_price)}</span>
+                  <span className="text-xs font-semibold text-[#022135]">{formatCurrency(item.unit_price * item.quantity)}</span>
                 </div>
               </div>
             ))}
@@ -166,7 +166,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
       <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject Order">
         <div className="space-y-4">
           <p className="text-sm text-slate-500">
-            Please provide a reason for rejecting order <strong>#{order.id.slice(-6).toUpperCase()}</strong>.
+            Please provide a reason for rejecting order <strong>#{orderDisplayId(order)}</strong>.
           </p>
           <Input
             label="Rejection Reason"

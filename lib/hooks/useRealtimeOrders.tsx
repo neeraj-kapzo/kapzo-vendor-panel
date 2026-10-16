@@ -101,10 +101,15 @@ export function useRealtimeOrders(vendorId: string | undefined) {
       updateOrderStatus(event.orderId, mapOrderStatus(event.status))
     }
 
+    const refreshPayments = () => {
+      void fetchActiveOrders(vendorId).then(setActiveOrders).catch(() => {})
+    }
+    socket.on('payment-updated', refreshPayments)
     socket.on('new-order', onNewOrder)
     socket.on('order-status', onOrderStatus)
 
     return () => {
+      socket.off('payment-updated', refreshPayments)
       socket.off('new-order', onNewOrder)
       socket.off('order-status', onOrderStatus)
       if (flashIntervalRef.current) {
@@ -112,5 +117,5 @@ export function useRealtimeOrders(vendorId: string | undefined) {
         flashIntervalRef.current = null
       }
     }
-  }, [vendorId, addPendingOrder, updateOrderStatus])
+  }, [vendorId, addPendingOrder, updateOrderStatus, setActiveOrders])
 }
