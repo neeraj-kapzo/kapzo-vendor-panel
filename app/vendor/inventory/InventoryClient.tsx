@@ -8,7 +8,14 @@ import {
 import { Toggle } from '@/components/ui/Toggle'
 import { SkeletonRow } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
-import { fetchInventory, upsertInventory, type BackendInventoryRow } from '@/lib/api'
+import {
+  fetchInventory,
+  upsertInventory,
+  type BackendInventoryRow,
+  type CatalogScope,
+  type CatalogSortKey,
+} from '@/lib/api'
+import { Highlight, MIN_QUERY_LENGTH, SCOPES, isSearchable, scopeNoun, sortOptions } from '@/lib/catalogSearch'
 import { isDemoMode } from '@/lib/demo'
 import { cn, formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -37,10 +44,10 @@ export type MergedInventoryItem = {
 }
 
 type FilterType = 'all' | 'available' | 'unavailable'
+type RxFilter   = 'all' | 'rx' | 'otc'
 type ViewType   = 'table' | 'grid'
 
 const PAGE_SIZE = 20 // matches the backend's page size exactly
-const MIN_SEARCH_CHARS = 3 // matches the backend's search-term minimum
 
 interface InventoryClientProps {
   vendorId:   string
@@ -159,18 +166,27 @@ function getPageNums(current: number, total: number): (number | '…')[] {
    Pagination bar
 ═══════════════════════════════════════════════════════════ */
 function PaginationBar({
-  page, total, onChange,
+  page, total, maxPage, capped, onChange,
 }: {
   page:     number
   total:    number
+  /** Last page the API serves (deeper pages are refused). */
+  maxPage?: number
+  /** `total` stopped counting at its cap. */
+  capped?:  boolean
   onChange: (p: number) => void
 }) {
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const totalPages = Math.min(Math.ceil(total / PAGE_SIZE), maxPage ?? Infinity)
   if (totalPages <= 1) return null
   const pages = getPageNums(page, totalPages)
 
   return (
     <div className="flex items-center justify-end gap-3 pt-2">
+      {capped && (
+        <span className="text-xs text-slate-400">
+          {total.toLocaleString()}+ matches — refine your search to narrow them
+        </span>
+      )}
       <div className="flex items-center gap-1">
         <button
           onClick={() => onChange(page - 1)}
@@ -234,6 +250,8 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
   // search and pagination before this state is ever set.
   const [items,       setItems]       = useState<MergedInventoryItem[]>(() => demoItems ?? [])
   const [total,       setTotal]       = useState(0)
+  const [totalCapped, setTotalCapped] = useState(false)
+  const [maxPage,     setMaxPage]     = useState<number | undefined>(undefined)
   const [page,        setPage]        = useState(1)
   const [loading,     setLoading]     = useState(!isDemoMode)
   const [search,      setSearch]      = useState('')
@@ -241,6 +259,9 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
   // backend round trip — only what the user pauses on does.
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filter,      setFilter]      = useState<FilterType>('all')
+  const [scope,       setScope]       = useState<CatalogScope>('all')
+  const [rx,          setRx]          = useState<RxFilter>('all')
+  const [sort,        setSort]        = useState<CatalogSortKey>('relevance')
   const [view,        setView]        = useState<ViewType>('table')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy,    setBulkBusy]    = useState(false)
@@ -249,12 +270,14 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
   useEffect(() => {
     const t = setTimeout(() => {
       // The backend rejects search terms under 3 characters (they match most
-      // of the 665k-row catalog), so shorter input is treated as "no search"
-      // — which also keeps "d" → "do" from firing duplicate list requests.
-      const term = search.trim()
-      setDebouncedSearch(term.length >= MIN_SEARCH_CHARS ? term : '')
+      // of the 665k-row catalog) — except a 1-2 digit strength like "5" or
+      // "40". Too-short text keeps the current results on screen rather than
+      // firing a request that would be refused.
+      const term = search.trim().replace(/\s+/g, ' ')
+      if (!isSearchable(term)) return
+      setDebouncedSearch(term)
       setPage(1)
-    }, 300)
+    }, 250)
     return () => clearTimeout(t)
   }, [search])
 
@@ -268,26 +291,43 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
   useEffect(() => {
     if (isDemoMode) return
     const fetchId = ++fetchIdRef.current
+    // A newer keystroke aborts this request so the server stops ranking for it.
+    const controller = new AbortController()
     // `setLoading(true)` is deferred into the microtask queue (rather than
     // called synchronously here) to satisfy react-hooks/set-state-in-effect.
     Promise.resolve()
       .then(() => {
         if (fetchIdRef.current === fetchId) setLoading(true)
       })
-      .then(() => fetchInventory(debouncedSearch || undefined, page))
-      .then((result) => {
+      .then(() =>
+        fetchInventory(
+          {
+            q: debouncedSearch || undefined,
+            page,
+            scope,
+            requiresPrescription: rx === 'all' ? undefined : rx === 'rx',
+            sort,
+          },
+          controller.signal,
+        ),
+      )      .then((result) => {
         if (fetchIdRef.current !== fetchId) return
         setItems(result.items.map(mapInventoryRow))
         setTotal(result.total)
+        setTotalCapped(!!result.totalCapped)
+        setMaxPage(result.maxPage)
         setLoading(false)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return // superseded
         if (fetchIdRef.current !== fetchId) return
         setItems([])
         setTotal(0)
+        setTotalCapped(false)
         setLoading(false)
       })
-  }, [debouncedSearch, page])
+    return () => controller.abort()
+  }, [debouncedSearch, page, scope, rx, sort])
 
   /* ── Demo mode: search + paginate the mutable mock list client-side —
      same end shape as the real fetch above, so rendering below doesn't need
@@ -297,11 +337,21 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
     // Same rule as the backend: every word must appear in the brand name,
     // salt or manufacturer (not necessarily the same one).
     const words = debouncedSearch.toLowerCase().split(/\s+/).filter(Boolean)
-    return items.filter((i) => {
-      const haystack = [i.name, i.salt_name, i.manufacturer].join(' ').toLowerCase()
-      return words.every((w) => haystack.includes(w))
-    })
-  }, [items, debouncedSearch])
+    const rows = items
+      .filter((i) => rx === 'all' || i.requires_prescription === (rx === 'rx'))
+      .filter((i) => {
+        const fields =
+          scope === 'name' ? [i.name]
+          : scope === 'composition' ? [i.salt_name]
+          : scope === 'manufacturer' ? [i.manufacturer]
+          : [i.name, i.salt_name, i.manufacturer]
+        const haystack = fields.join(' ').toLowerCase()
+        return words.every((w) => haystack.includes(w))
+      })
+    if (sort === 'priceAsc') return [...rows].sort((a, b) => a.mrp - b.mrp)
+    if (sort === 'priceDesc') return [...rows].sort((a, b) => b.mrp - a.mrp)
+    return rows
+  }, [items, debouncedSearch, scope, rx, sort])
 
   const pageItems = isDemoMode
     ? demoSearched.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -474,7 +524,7 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by brand, salt or manufacturer (min. 3 letters)…"
+            placeholder={`${(SCOPES.find((s) => s.value === scope) ?? SCOPES[0]).placeholder} (min. ${MIN_QUERY_LENGTH} letters)…`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full h-10 pl-9 pr-3 rounded-[8px] border border-slate-200 bg-white text-sm text-[#022135] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#21A053]/30 focus:border-[#21A053]"
@@ -511,11 +561,61 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
           ))}
         </div>
 
+        {/* Search scope, Rx/OTC, sort — all applied by the backend search */}
+        <div role="radiogroup" aria-label="Search in" className="flex gap-1 bg-white border border-slate-200 rounded-[8px] p-1 shrink-0">
+          {SCOPES.map((s) => (
+            <button
+              key={s.value}
+              role="radio"
+              aria-checked={scope === s.value}
+              onClick={() => { setScope(s.value); setPage(1) }}
+              className={cn(
+                'px-3 py-1 rounded-[6px] text-xs font-medium transition-colors',
+                scope === s.value ? 'bg-[#022135] text-white' : 'text-slate-500 hover:text-[#022135]'
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div role="radiogroup" aria-label="Type" className="flex gap-1 bg-white border border-slate-200 rounded-[8px] p-1 shrink-0">
+          {([['all', 'All'], ['rx', 'Rx'], ['otc', 'OTC']] as [RxFilter, string][]).map(([v, label]) => (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={rx === v}
+              onClick={() => { setRx(v); setPage(1) }}
+              className={cn(
+                'px-3 py-1 rounded-[6px] text-xs font-medium transition-colors',
+                rx === v ? 'bg-[#022135] text-white' : 'text-slate-500 hover:text-[#022135]'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <select
+          aria-label="Sort by"
+          value={sort}
+          onChange={(e) => { setSort(e.target.value as CatalogSortKey); setPage(1) }}
+          className="h-9 rounded-[8px] border border-slate-200 bg-white px-2 text-xs text-[#022135] focus:outline-none focus:ring-2 focus:ring-[#21A053]/30 shrink-0"
+        >
+          {sortOptions(debouncedSearch !== '').map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+
         {/* Result count — scoped to this page */}
         <span className="text-xs text-slate-400 shrink-0">
           {filtered.length} of {pageItems.length} on this page
         </span>
       </div>
+
+      {!isSearchable(search.trim()) && (
+        <p className="-mt-3 text-xs text-slate-400">
+          Type at least {MIN_QUERY_LENGTH} characters{debouncedSearch ? ` — still showing results for “${debouncedSearch}”` : ''}
+        </p>
+      )}
 
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (
@@ -555,7 +655,7 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
             <SkeletonRow key={i} />
           ))}
         </div>
-      ) : pageTotal === 0 && !debouncedSearch && filter === 'all' ? (
+      ) : pageTotal === 0 && !debouncedSearch && filter === 'all' && rx === 'all' ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="w-20 h-20 rounded-2xl bg-[#21A053]/8 flex items-center justify-center mb-5">
             <Package size={36} className="text-[#21A053]/40" />
@@ -569,8 +669,10 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-14 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <Search size={28} className="text-slate-200 mb-3" />
-          <p className="text-sm font-semibold text-slate-500">No medicines match your search</p>
-          <button onClick={() => { setSearch(''); setFilter('all') }} className="mt-2 text-xs text-[#21A053] hover:underline">
+          <p className="text-sm font-semibold text-slate-500">
+            {debouncedSearch ? `No medicines match “${debouncedSearch}”${scope !== 'all' ? ` in ${scopeNoun(scope)}` : ''}` : 'No medicines match your search'}
+          </p>
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setFilter('all'); setRx('all'); setScope('all') }} className="mt-2 text-xs text-[#21A053] hover:underline">
             Clear filters
           </button>
         </div>
@@ -630,9 +732,9 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
 
                       {/* Name + Salt */}
                       <td className="px-3 py-3 min-w-[160px]">
-                        <p className="text-sm font-semibold text-[#022135] truncate max-w-[220px]">{item.name}</p>
+                        <p className="text-sm font-semibold text-[#022135] truncate max-w-[220px]"><Highlight text={item.name} query={debouncedSearch} /></p>
                         {item.salt_name && (
-                          <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[220px]">{item.salt_name}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[220px]"><Highlight text={item.salt_name} query={debouncedSearch} /></p>
                         )}
                       </td>
 
@@ -653,7 +755,7 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
                       {/* Manufacturer */}
                       <td className="px-3 py-3">
                         <p className="text-xs text-slate-500 truncate max-w-[200px]" title={item.manufacturer ?? undefined}>
-                          {item.manufacturer || '—'}
+                          {item.manufacturer ? <Highlight text={item.manufacturer} query={debouncedSearch} /> : '—'}
                         </p>
                       </td>
 
@@ -763,7 +865,7 @@ export function InventoryClient({ vendorId, demoItems }: InventoryClientProps) {
 
       {/* ── Pagination ── */}
       {!loading && (
-        <PaginationBar page={page} total={pageTotal} onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+        <PaginationBar page={page} total={pageTotal} maxPage={isDemoMode ? undefined : maxPage} capped={!isDemoMode && totalCapped} onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
       )}
 
       <ProductDetailsModal item={detailsItem} onClose={() => setDetailsItem(null)} />

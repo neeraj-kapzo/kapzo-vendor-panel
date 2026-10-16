@@ -24,6 +24,8 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>
   /** Skip the Authorization header (only /auth/bootstrap sets its own). */
   token?: string
+  /** Abort an in-flight request (rejects with a DOMException named AbortError). */
+  signal?: AbortSignal
 }
 
 /**
@@ -52,9 +54,11 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
         Authorization: `Bearer ${token}`,
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
+      signal: options.signal,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
     throw new ApiError(0, 'Network error — could not reach the Kapzo server')
   }
 

@@ -180,6 +180,26 @@ export interface BackendInventoryRow {
 export interface BackendInventoryPage {
   items: BackendInventoryRow[]
   total: number
+  /** True when `total` stopped counting at its cap — show "1,000+". */
+  totalCapped?: boolean
+  /** Last page the API serves; deeper pages are refused. */
+  maxPage?: number
+}
+
+/** Which column(s) the inventory search box looks in. */
+export type CatalogScope = 'all' | 'name' | 'composition' | 'manufacturer'
+
+/** "relevance" = best match first (A-Z when there is no search text). */
+export type CatalogSortKey = 'relevance' | 'name' | 'priceAsc' | 'priceDesc'
+
+/** Everything the Inventory page sends to `GET /vendors/me/inventory`. */
+export interface InventoryQuery {
+  q?: string
+  page?: number
+  scope?: CatalogScope
+  /** true = prescription only, false = OTC; omit for both. */
+  requiresPrescription?: boolean
+  sort?: CatalogSortKey
 }
 
 export interface BackendVendorInventory {

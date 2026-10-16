@@ -9,6 +9,7 @@ import { api } from './http'
 import { mapVendor, mapVendorOrderPlain, mapVendorOrders } from './mappers'
 import type {
   BackendInventoryPage,
+  InventoryQuery,
   BackendNotification,
   BackendOrderHistoryPage,
   BackendSimulatedSettlement,
@@ -248,8 +249,21 @@ export async function fetchDashboardStats(
 
 /* ─── Inventory ────────────────────────────────────────────────────── */
 
-export function fetchInventory(q?: string, page = 1): Promise<BackendInventoryPage> {
-  return api<BackendInventoryPage>('/vendors/me/inventory', { query: { q, page } })
+export function fetchInventory(
+  params: InventoryQuery,
+  signal?: AbortSignal,
+): Promise<BackendInventoryPage> {
+  return api<BackendInventoryPage>('/vendors/me/inventory', {
+    query: {
+      q: params.q || undefined,
+      page: params.page ?? 1,
+      // Defaults are omitted so the URL stays short.
+      scope: params.scope === 'all' ? undefined : params.scope,
+      requiresPrescription: params.requiresPrescription,
+      sort: params.sort === 'relevance' ? undefined : params.sort,
+    },
+    signal,
+  })
 }
 
 export function upsertInventory(
