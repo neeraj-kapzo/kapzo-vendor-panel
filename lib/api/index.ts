@@ -139,7 +139,7 @@ export function fetchClosedOrders(vendorId: string): Promise<OrderWithItems[]> {
   return fetchOrdersInStatuses(vendorId, CLOSED_STATUSES)
 }
 
-type VendorOrderAction = 'accept' | 'reject' | 'packing' | 'packed' | 'dispatched'
+type VendorOrderAction = 'accept' | 'reject' | 'packing' | 'packed'
 
 async function transitionOrder(
   vendorId: string,
@@ -162,8 +162,6 @@ export const markOrderPacking = (vendorId: string, orderId: string) =>
   transitionOrder(vendorId, orderId, 'packing')
 export const markOrderPacked = (vendorId: string, orderId: string) =>
   transitionOrder(vendorId, orderId, 'packed')
-export const markOrderDispatched = (vendorId: string, orderId: string) =>
-  transitionOrder(vendorId, orderId, 'dispatched')
 
 export async function fetchOrder(vendorId: string, orderId: string): Promise<OrderWithItems | null> {
   // No single-order GET on the vendor surface; look through active statuses.
@@ -290,7 +288,7 @@ export function markNotificationRead(id: string): Promise<BackendNotification> {
 
 /* ─── Storage ──────────────────────────────────────────────────────── */
 
-export type UploadPurpose = 'prescription' | 'license' | 'avatar'
+export type UploadPurpose = 'prescription' | 'license' | 'avatar' | 'pickup'
 export type UploadContentType = 'image/jpeg' | 'image/png' | 'application/pdf'
 
 /**

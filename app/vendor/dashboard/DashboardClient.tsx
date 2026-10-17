@@ -5,14 +5,13 @@ import { ShoppingBag, IndianRupee, Clock, TrendingUp, FlaskConical } from 'lucid
 import { StatsCard } from '@/components/vendor/StatsCard'
 import { OrderFeedCard } from '@/components/vendor/OrderFeedCard'
 import { OnlineToggle } from '@/components/vendor/OnlineToggle'
-import { NewOrderToastContainer } from '@/components/vendor/NewOrderToast'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useOrders } from '@/lib/hooks/useOrders'
-import { fetchDashboardStats, fetchActiveOrders, type NewOrderEvent } from '@/lib/api'
-import { getSocket } from '@/lib/realtime'
+import { fetchDashboardStats } from '@/lib/api'
 import { useOnSimulationReset } from '@/lib/hooks/useSimulationReset'
 import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
+import { DEMO_NEW_ORDER_EVENT } from '@/lib/hooks/useNewOrderAlerts'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
@@ -25,42 +24,10 @@ interface Stats {
   acceptanceRate: number
 }
 
-interface NewOrderAlert {
-  id: string
-  order: Order
-}
-
 interface DashboardClientProps {
   vendor: Vendor
   initialStats: Stats
   initialOrders: Order[]
-}
-
-/* ── Web Audio beep — no external files ── */
-function playAlertBeep() {
-  try {
-    const ctx = new AudioContext()
-    const t = ctx.currentTime
-
-    function beep(freq: number, start: number, duration: number) {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.value = freq
-      osc.type = 'sine'
-      gain.gain.setValueAtTime(0.45, t + start)
-      gain.gain.exponentialRampToValueAtTime(0.001, t + start + duration)
-      osc.start(t + start)
-      osc.stop(t + start + duration)
-    }
-
-    beep(880, 0, 0.35)
-    beep(1100, 0.4, 0.35)
-    beep(880, 0.8, 0.35)
-  } catch {
-    /* AudioContext not available (SSR / old browser) — silent fail */
-  }
 }
 
 function getGreeting() {
@@ -74,7 +41,6 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
   const { setVendor, setActiveOrders, activeOrders } = useVendorStore()
   const [stats, setStats]             = useState<Stats>(initialStats)
   const [statsLoading, setStatsLoading] = useState(false)
-  const [alerts, setAlerts]           = useState<NewOrderAlert[]>([])
 
   /* ── Demo store (noop when not in demo mode) ── */
   const { addSimulatedOrder } = useDemoStore()
@@ -108,57 +74,12 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
     return () => clearInterval(id)
   }, [refreshStats])
 
-  /* ── Incoming order alerts (Socket.IO `new-order`) — skip in demo mode ── */
-  useEffect(() => {
-    if (isDemoMode) return
-
-    const socket = getSocket()
-    let titleInterval: ReturnType<typeof setInterval> | null = null
-
-    function flashTitle() {
-      if (titleInterval) return
-      const original = document.title
-      let on = true
-      titleInterval = setInterval(() => {
-        document.title = on ? '\uD83D\uDD14 New Order!' : 'Kapzo Vendor'
-        on = !on
-      }, 1_000)
-      setTimeout(() => {
-        if (titleInterval) clearInterval(titleInterval)
-        titleInterval = null
-        document.title = original
-      }, 10_000)
-    }
-
-    const onNewOrder = async (event: NewOrderEvent) => {
-      // Thin event — pull the full pending row for the toast
-      const orders = await fetchActiveOrders(vendor.id)
-      const order = orders.find((o) => o.id === event.orderId)
-      if (!order) return
-      setAlerts((prev) => [...prev, { id: order.id, order }])
-      playAlertBeep()
-      flashTitle()
-    }
-
-    socket.on('new-order', onNewOrder)
-
-    return () => {
-      socket.off('new-order', onNewOrder)
-      if (titleInterval) clearInterval(titleInterval)
-    }
-  }, [vendor.id])
-
   /* ── Admin wiped the simulated orders: drop their alerts, refresh counts.
        The shell already removed them from the store (useOrders refetches). ── */
   const onSimulationReset = useCallback(() => {
-    setAlerts((prev) => prev.filter((a) => !a.order.is_simulated))
     void refreshStats()
   }, [refreshStats])
   useOnSimulationReset(onSimulationReset)
-
-  function dismissAlert(id: string) {
-    setAlerts((prev) => prev.filter((a) => a.id !== id))
-  }
 
   /* ── Demo: simulate a new incoming order ── */
   function simulateNewOrder() {
@@ -167,28 +88,12 @@ export function DashboardClient({ vendor, initialStats, initialOrders }: Dashboa
     // Add to demo store so OrdersClient can pick it up
     addSimulatedOrder(order)
 
-    // Trigger the notification UI on this page
-    setAlerts((prev) => [...prev, { id: order.id, order: order as unknown as Order }])
-    playAlertBeep()
-
-    // Flash tab title for 8 seconds
-    const original = document.title
-    let on = true
-    const interval = setInterval(() => {
-      document.title = on ? '🔔 New Order!' : 'Kapzo Vendor'
-      on = !on
-    }, 1_000)
-    setTimeout(() => {
-      clearInterval(interval)
-      document.title = original
-    }, 8_000)
+    // Shell-level alert (beep + tab flash + toast) fires on every page
+    window.dispatchEvent(new CustomEvent(DEMO_NEW_ORDER_EVENT, { detail: order }))
   }
 
   return (
     <>
-      {/* Sliding toast alerts — fixed top-right, outside normal flow */}
-      <NewOrderToastContainer alerts={alerts} onDismiss={dismissAlert} />
-
       <div className="space-y-6 max-w-7xl mx-auto">
 
         {/* ── Page header ── */}

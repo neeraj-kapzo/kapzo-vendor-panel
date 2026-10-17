@@ -95,7 +95,7 @@ backend; the handshake carries the Firebase token in `auth.token` and the
 server auto-joins the vendor room. Events:
 
 - `new-order` `{orderId, orderNumber, expiresAt, total, isSimulated}` — beep + tab-title
-  flash + toast, then refetch the pending list
+  flash + toast (shell-level), then refetch the pending list
 - `order-status` `{orderId, status, isSimulated}` — silent store sync (covers the server's
   120 s auto-reject too)
 - `simulation-reset` `{vendorId}` — admin wiped this vendor's simulated orders.
@@ -107,12 +107,15 @@ server auto-joins the vendor room. Events:
   Dashboard drop simulated rows/alerts from their local state (Dashboard also
   refreshes its stats, `useOrders` refetches), History and Settlements refetch
 
-The `new-order` / `order-status` listeners live in the pages themselves:
-`DashboardClient` (beep + tab flash + `NewOrderToast`), `OrdersClient` (local
-active/closed lists + the pending timer card) and `useOrders.ts` (store
-refetch on any event, used by the Dashboard). `lib/hooks/useRealtimeOrders.tsx`
-is currently not mounted anywhere — don't mount it alongside the pages, its
-`new-order` beep/toast would duplicate the Dashboard's.
+The new-order **alert** (beep from `lib/alertSound.ts` + tab-title flash + `NewOrderToast`)
+is mounted once by the vendor shell (`app/vendor/layout.tsx` → `useNewOrderAlerts` in
+`lib/hooks/useNewOrderAlerts.ts`), so it fires on every page for an active vendor and **rings in a loop until each alerted order leaves PENDING** (accept/reject here or elsewhere via `order-status`, auto-reject at `expiresAt`, or the demo store). Demo
+mode's "Simulate New Order" dispatches `DEMO_NEW_ORDER_EVENT` to the same alert. The
+data listeners stay in the pages: `OrdersClient` (local active/closed lists + the
+pending timer card) and `useOrders.ts` (store refetch on any event, used by the
+Dashboard). Don't add a beep/toast to a page, and `lib/hooks/useRealtimeOrders.tsx`
+is currently not mounted anywhere — don't mount it, its `new-order` beep/toast would
+duplicate the shell's.
 
 ### Order state machine (backend-enforced)
 

@@ -108,6 +108,11 @@ export interface BackendVendorOrder {
   items: BackendOrderItem[]
   customerName?: string | null
   secondsLeft?: number | null
+  /** A rider has accepted and is collecting this packed order. */
+  riderAssigned?: boolean
+  riderName?: string | null
+  /** The 4-digit code the vendor reads out; the rider types it to take the order. */
+  pickupOtp?: string | null
   /** Admin-simulated order (training). Real alert + state machine; never paid out. */
   isSimulated?: boolean
   paymentMode: BackendPaymentMode

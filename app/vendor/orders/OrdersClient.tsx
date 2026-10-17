@@ -14,7 +14,6 @@ import {
   acceptOrder,
   fetchActiveOrders,
   fetchClosedOrders,
-  markOrderDispatched,
   markOrderPacked,
   markOrderPacking,
   mapOrderStatus,
@@ -24,7 +23,7 @@ import {
 } from '@/lib/api'
 import { getSocket } from '@/lib/realtime'
 import { useOnSimulationReset } from '@/lib/hooks/useSimulationReset'
-import { isDemoMode, generateDemoSimulatedOrder } from '@/lib/demo'
+import { isDemoMode, generateDemoSimulatedOrder, DEMO_PICKUP_OTP } from '@/lib/demo'
 import { useDemoStore } from '@/lib/demo/demoStore'
 import { orderDisplayId, cn, formatCurrency, timeAgo, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -53,17 +52,16 @@ type RejectReason = typeof REJECT_REASONS[number]
 
 const STATUS_STEPS: OrderStatus[] = ['accepted', 'packed', 'dispatched']
 
+// PACKED -> DISPATCHED is not a button: the rider takes the order by typing the
+// pickup code shown on the packed order (plus a photo) in their own app.
 const STATUS_FLOW: Partial<Record<OrderStatus, OrderStatus>> = {
   pending:  'accepted',
   accepted: 'packed',
-  packed:   'dispatched',
 }
 
 const ACTION_CONFIG: Partial<Record<OrderStatus, { label: string; bgClass: string; note?: string }>> = {
   pending:  { label: 'Accept Order',       bgClass: 'bg-[#21A053] hover:bg-[#178040]' },
   accepted: { label: 'Mark as Packed',     bgClass: 'bg-[#00326F] hover:bg-[#002a5c]' },
-  packed:   { label: 'Confirm Dispatched', bgClass: 'bg-slate-700 hover:bg-slate-800',
-               note: 'Enable once rider confirms pickup' },
 }
 
 const STATUS_DOT: Record<OrderStatus, string> = {
@@ -491,6 +489,35 @@ function OrderDetailPanel({ order, onClose, onAdvance, onReject, busy }: DetailP
           )}
         </div>
 
+        {/* Packed: show the rider the pickup code - they type it and photograph the order */}
+        {order.status === 'packed' && (
+          <div className="shrink-0 border-t border-slate-100 px-5 py-4 space-y-2 bg-white">
+            {order.rider_assigned || isDemoMode ? (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 text-center">
+                  Pickup code
+                </p>
+                <p
+                  className="text-center text-4xl font-bold tracking-[0.4em] text-[#022135] pl-[0.4em]"
+                  aria-label="Pickup code"
+                >
+                  {(isDemoMode ? DEMO_PICKUP_OTP : order.pickup_otp) ?? '····'}
+                </p>
+                <p className="text-[11px] text-slate-500 text-center">
+                  {order.rider_name ? `${order.rider_name} is collecting this order.` : 'A rider is collecting this order.'}{' '}
+                  Read this code out when you hand over the packed order. The rider enters it and
+                  photographs the order, and it is marked dispatched.
+                </p>
+              </>
+            ) : (
+              <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-50 border border-slate-100 h-11 text-xs font-medium text-slate-500">
+                <Loader2 size={14} className="animate-spin" />
+                Waiting for a rider to accept this order…
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Footer actions */}
         {action && (
           <div className="shrink-0 border-t border-slate-100 px-5 py-4 space-y-2 bg-white">
@@ -840,6 +867,7 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     }
     const poll = setInterval(() => void refreshOrders(), 30000)
     socket.on('payment-updated', refreshOrders)
+    socket.on('rider-assigned', refreshOrders)
     socket.on('connect', refreshOrders)
     socket.on('new-order', onNewOrder)
     socket.on('order-status', onOrderStatus)
@@ -847,6 +875,7 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
     return () => {
       clearInterval(poll)
       socket.off('payment-updated', refreshOrders)
+      socket.off('rider-assigned', refreshOrders)
       socket.off('connect', refreshOrders)
       socket.off('new-order', onNewOrder)
       socket.off('order-status', onOrderStatus)
@@ -902,8 +931,6 @@ export function OrdersClient({ vendorId, initialActive, initialClosed }: OrdersC
         // single "Mark as Packed" action walks both steps.
         await markOrderPacking(vendorId, order.id)
         await markOrderPacked(vendorId, order.id)
-      } else if (next === 'dispatched') {
-        await markOrderDispatched(vendorId, order.id)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update order')

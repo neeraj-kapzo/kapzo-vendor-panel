@@ -7,29 +7,7 @@ import type { NewOrderEvent, OrderStatusEvent } from '@/lib/api'
 import { getSocket } from '@/lib/realtime'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { isDemoMode } from '@/lib/demo'
-
-/* ─── Audio alert (Web Audio API — no files needed) ─── */
-function playAlertBeep() {
-  try {
-    const ctx = new AudioContext()
-    const freqs = [880, 1100, 880]
-    freqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.value = freq
-      const t = ctx.currentTime + i * 0.18
-      gain.gain.setValueAtTime(0.4, t)
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15)
-      osc.start(t)
-      osc.stop(t + 0.15)
-    })
-  } catch {
-    // Autoplay policy blocked — silent fail
-  }
-}
+import { playAlertBeep } from '@/lib/alertSound'
 
 /* ─── Tab title flash ─── */
 function flashTitle(intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>) {

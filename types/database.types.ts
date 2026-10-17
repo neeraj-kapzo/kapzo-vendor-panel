@@ -108,6 +108,14 @@ export interface Order {
   seconds_left?: number | null
   /** Admin-simulated order — shown with a "Simulated" badge, never paid out. */
   is_simulated?: boolean
+  /**
+   * A rider has accepted this PACKED order and is coming to collect it. The
+   * pickup code below is only shown once this is true.
+   */
+  rider_assigned?: boolean
+  rider_name?: string | null
+  /** Code the vendor reads out to the rider, who types it (with a photo) to take the order. */
+  pickup_otp?: string | null
   payment_mode: PaymentMode
   payment_status: OrderPaymentStatus
 }

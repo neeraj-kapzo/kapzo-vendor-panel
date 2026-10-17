@@ -11,7 +11,6 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import {
   acceptOrder,
-  markOrderDispatched,
   markOrderPacked,
   markOrderPacking,
   rejectOrder as apiRejectOrder,
@@ -31,14 +30,12 @@ const nextStatusMap: Partial<Record<OrderStatus, OrderStatus>> = {
   pending: 'accepted',
   accepted: 'packing',
   packing: 'packed',
-  packed: 'dispatched',
 }
 
 const actionLabels: Partial<Record<OrderStatus, string>> = {
   pending: 'Accept Order',
   accepted: 'Start Packing',
   packing: 'Mark Packed',
-  packed: 'Dispatch',
 }
 
 export function OrderCard({ order, onStatusChange }: OrderCardProps) {
@@ -59,8 +56,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
         accepted: acceptOrder,
         packing: markOrderPacking,
         packed: markOrderPacked,
-        dispatched: markOrderDispatched,
-      }[nextStatus as 'accepted' | 'packing' | 'packed' | 'dispatched']
+      }[nextStatus as 'accepted' | 'packing' | 'packed']
       await transition(order.vendor_id, order.id)
       toast.success(`Order marked as ${nextStatus}`)
       onStatusChange?.(order.id, nextStatus)

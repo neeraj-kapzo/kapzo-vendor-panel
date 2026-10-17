@@ -14,6 +14,8 @@ import { OnlineToggle } from '@/components/vendor/OnlineToggle'
 import { useVendorStore } from '@/lib/store/vendorStore'
 import { useVendor } from '@/lib/hooks/useVendor'
 import { useSimulationResetListener } from '@/lib/hooks/useSimulationReset'
+import { useNewOrderAlerts } from '@/lib/hooks/useNewOrderAlerts'
+import { NewOrderToastContainer } from '@/components/vendor/NewOrderToast'
 import { signOutVendor } from '@/lib/session'
 import { isDemoMode } from '@/lib/demo'
 import { cn } from '@/lib/utils'
@@ -53,6 +55,14 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
 
   /* One shell-level listener for admin simulation resets (see useSimulationReset) */
   useSimulationResetListener(!isDemoMode && inShell && vendor?.status === 'active')
+
+  /* One shell-level new-order alert (beep + tab flash + toast) for every page */
+  const isActive = vendor?.status === 'active'
+  const { alerts, dismiss: dismissAlert } = useNewOrderAlerts(
+    vendor?.id,
+    !isDemoMode && inShell && isActive,
+    isDemoMode && inShell,
+  )
   const visibleNav = isPending
     ? navItems.filter((item) => PENDING_NAV_HREFS.has(item.href))
     : navItems
@@ -70,6 +80,9 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Sliding new-order toasts — fixed top-right, on every page */}
+      <NewOrderToastContainer alerts={alerts} onDismiss={dismissAlert} />
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

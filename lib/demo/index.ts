@@ -55,6 +55,9 @@ export const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export const DEMO_VENDOR_ID = 'demo-vendor-001'
 
+/** Demo mode: the pickup code the vendor reads out to the rider. */
+export const DEMO_PICKUP_OTP = '4821'
+
 export const DEMO_VENDOR: Vendor = {
   id:                   DEMO_VENDOR_ID,
   user_id:              'demo-user-001',
